@@ -192,6 +192,23 @@ class Regions:
         return intervals
     
 
+    def eventInfo(self,event):
+        # get event information matrix
+        #
+        # arguments:
+        #     event    string, event about which to get information
+        #
+        # output:
+        #     info     (:,:) float, event information, each row corresponds to an instance of the event
+
+        if event not in self.events:
+            raise ValueError(f'Unable to find event {event}')
+        
+        info = self.events[event]
+
+        return info
+    
+
     def units(self,regs=None):
         # get pooled list of units for regions
         #
