@@ -1,6 +1,6 @@
 ''' Session data handling functions for FMAToolbox '''
 
-from typing import Callable, List, Any
+from typing import Any, Callable
 import pathlib
 import scipy.io
 import numpy as np
@@ -8,10 +8,11 @@ import ast
 import datetime
 import traceback
 import re
+import fmatoolbox.exceptions
 import collections
 
 
-def loadSpikeTimes(session : str, output : str = 'dict', return_elec : bool = False, return_loc : bool = False):
+def loadSpikeTimes(session: str, output: str = 'dict', return_elec: bool = False, return_loc: bool = False):
     # load spikes from a session
     #
     # arguments:
@@ -60,7 +61,7 @@ def loadSpikeTimes(session : str, output : str = 'dict', return_elec : bool = Fa
     return out[:2+return_loc:2-return_elec]
 
 
-def loadEventFile(filename : str, compact : bool = False):
+def loadEventFile(filename: str, compact: bool = False):
     # load events from a .evt file
     #
     # arguments:
@@ -85,7 +86,7 @@ def loadEventFile(filename : str, compact : bool = False):
         events = collections.defaultdict(lambda: collections.defaultdict(list))
         for t, d in zip(times,descriptions):
             if " of " not in d:
-                raise ValueError(f"Unexpected format: '{d}'")
+                raise fmatoolbox.exceptions.FileFormatError(f"Unexpected format: '{d}'")
             phase, full_id = d.split(" of ",1)
             phase = phase.strip()
             full_id = full_id.strip()
@@ -108,7 +109,7 @@ def loadEventFile(filename : str, compact : bool = False):
     return events
 
 
-def loadEvents(session : str, extra : List[str]):
+def loadEvents(session: str, extra: list[str]):
     # load event files from a session
     #
     # arguments:
@@ -125,7 +126,10 @@ def loadEvents(session : str, extra : List[str]):
     # load all *.evt files
     events = {}
     for file in file_root.glob("*.evt"):
-        this_events = loadEventFile(file,compact=True)
+        try:
+            this_events = loadEventFile(file,compact=True)
+        except fmatoolbox.exceptions.FileFormatError:
+            this_events = {}
         for event in this_events.keys():
             # MUST ENFORCE THAT BEGINNING IS FIRST AND END IS SECOND!!
             if event in events:
@@ -143,17 +147,18 @@ def loadEvents(session : str, extra : List[str]):
     return events
 
 
-def loadSpikeWaveforms(session : str):
+def loadSpikeWaveforms(session: str):
 
     file_root = pathlib.Path(session).with_suffix('')
     data = scipy.io.loadmat(file_root.with_suffix('.cell_metrics.cellinfo.mat'),simplify_cells=True)['cell_metrics']
     waveforms = data['waveforms']
     # INSPECT struct TO FIND OUTPUT
+    print('implement!')
 
     return
 
 
-def loadLFP(session : str):
+def loadLFP(session: str):
 
     print('implement!')
 
@@ -169,7 +174,7 @@ def saveMatrix():
 
 # functions to run batch
 
-def readBatchFile(file_path : str):
+def readBatchFile(file_path: str):
     # read batch file
     #
     # arguments:
@@ -217,7 +222,7 @@ def readBatchFile(file_path : str):
     return sessions, args
 
 
-def runBatch(batch_file: str, func: Callable, args: List[List[Any]] = [[]], ignore_args: bool = False, sessions: List[int] = None, verbose: bool = True):
+def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = [[]], ignore_args: bool = False, sessions: list[int] = None, verbose: bool = True) -> tuple[list, ...]:
     # run a routine on multiple sessions
     #
     # arguments:

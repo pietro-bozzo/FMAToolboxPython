@@ -1,4 +1,4 @@
-''' Plotting utilities for publication grade figures ''' 
+''' Plotting utilities for publication grade figures '''
 
 import matplotlib.pyplot
 
