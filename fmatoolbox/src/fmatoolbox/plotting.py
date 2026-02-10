@@ -1,15 +1,16 @@
 ''' Plotting utilities for publication grade figures '''
 
-import matplotlib.pyplot
+import matplotlib.axes as matpla
+import matplotlib.pyplot as matplp
 
 
-def adjustAxes(axs):
+def adjustAxes(axs: matpla.Axes):
     # adjust axes properties to emprove figure appearance
     #
     # arguments:
     #     axs    collection of matplotlib axes
 
-    if isinstance(axs,matplotlib.axes._axes.Axes):
+    if isinstance(axs,matpla._axes.Axes):
         axs = [axs]
 
     for ax in axs:
@@ -25,7 +26,7 @@ def adjustAxes(axs):
     return
 
 
-def makeFigure(title,n=[1,1],size=[20,10]):
+def makeFigure(title: str, n: list[int] = [1,1], size: list[int] = [20,10]):
     # make a figure
     #
     # arguments:
@@ -38,10 +39,10 @@ def makeFigure(title,n=[1,1],size=[20,10]):
     #     axs    collection of matplotlib axes
 
     cm = 1 / 2.54 # inches to centimeter conversion factor
-    fig, axs = matplotlib.pyplot.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True)
+    fig, axs = matplp.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True)
 
     # promote single axis to iterable
-    if isinstance(axs,matplotlib.axes._axes.Axes):
+    if isinstance(axs,matpla._axes.Axes):
         axs = [axs]
 
     fig.suptitle(title)
