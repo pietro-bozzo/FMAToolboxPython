@@ -261,10 +261,10 @@ class Regions:
         # arguments:
         #     regs      (n) string = None, brain regions, default is all loaded regions
         #     states    (:) string = None, behavioral states, default is all
-        #     window    double = 0.05, window size to count spikes
-        #     step      double = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+        #     window    float = 0.05, window size to count spikes
+        #     step      int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
         #               default is no overlap
-        #     smooth    double = None, gaussian kernel std for smoothing over time
+        #     smooth    float = None, gaussian kernel std for smoothing over time
         #     norm      bool = False, normalize by neuron number per region
         #
         # output:
@@ -297,6 +297,17 @@ class Regions:
 
     def unitFiringRate(self,regs=None,states=None,window=0.05,step=1,smooth=None):
         # get units' firing rate
+        #
+        # arguments:
+        #     regs      (:) str = None, brain regions, default is all loaded regions
+        #     states    (:) str = None, behavioral states, default is all
+        #     window    float = 0.05 s, window size to count spikes
+        #     step      int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+        #               default is no overlap
+        #     smooth    float = None, gaussian kernel std for smoothing over time
+        #
+        # output:
+        #     rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
 
         regs, states = self._checkIDs(regs,states,fuse=True)
 
@@ -319,6 +330,18 @@ class Regions:
 
     def avalanches(self,regs=None,states=None,thresh=30,window=0.05,step=1,smooth=None):
         # compute avalanches per region from population firing rate
+        #
+        # arguments:
+        #     regs      (:) str = None, brain regions, default is all loaded regions
+        #     states    (:) str = None, behavioral states, default is all
+        #     thresh    float = 30, percentile to use as threshold, must be in [0,100]
+        #     window    float = 0.05 s, window size to count spikes
+        #     step      float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+        #               default is no overlap
+        #     smooth    float = None, gaussian kernel std for smoothing over time
+        #
+        # output:
+        #     rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
 
         regs, states = self._checkIDs(regs,states,fuse=True)
 
