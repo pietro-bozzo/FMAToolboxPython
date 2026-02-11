@@ -18,12 +18,13 @@ def adjustAxes(axs: matpla.Axes):
     for ax in axs:
         
         # remove upper and right borders
-        ax.spines[['right', 'top']].set_visible(False)
+        ax.spines[['right','top']].set_visible(False)
 
-        # adjust thickness
-        for spine in ['top','bottom','left','right']:
-            ax.spines[spine].set_linewidth(1.3)
-        ax.tick_params(width=1.3)
+        # adjust thickness and font size
+        ax.spines[['bottom','left']].set_linewidth(1.3)
+        ax.tick_params(width=1.3,labelsize=11)
+        ax.xaxis.label.set_fontsize(14)
+        ax.yaxis.label.set_fontsize(14)
 
     return
 
