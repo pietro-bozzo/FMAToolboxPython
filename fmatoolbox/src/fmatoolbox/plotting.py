@@ -1,9 +1,11 @@
 ''' Plotting utilities for publication grade figures '''
 
-import matplotlib.axes as matpla
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
+import matplotlib.axes as matpla
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scipy.stats as spst
 
 
 def adjustAxes(axs: matpla.Axes):
@@ -83,3 +85,38 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, x = N
     im = ax.imshow(data,aspect='auto',vmin=vmin,vmax=vmax,origin='lower',extent=[x[0]-dx,x[-1]+dx,y[0]-dy,y[-1]+dy])
 
     return im
+
+
+def semPlot(x, y, alpha = 0.5, zscore: bool = False, color = None, label: str = None, ax: matpla.Axes = None):
+    # plot mean +/- s.e.m. of matrix data
+    #
+    # arguments:
+    #     x         (n) float, x coordinates
+    #     y         (:,n) float, data to plot, each column corresponds to a value of x
+    #     alpha     float = 0.5, shaded area transparency value
+    #     zscore    bool = False, z-score w.r.t. average y
+    #     color     color = None
+    #     label     str = None, legend label for line
+    #     ax        Axes = plt.gca(), axes to plot in
+
+    y = np.array(y)
+
+    if ax is None:
+        ax = plt.gca()
+
+    # statistic value for each column
+    y_line = y.mean(axis=0)
+    # statistic confidence interval for each column
+    y_low, y_high = spst.bootstrap((y,),np.mean,n_resamples=50,vectorized=True,paired=True).confidence_interval
+
+    if zscore:
+        m = y_line.mean()
+        s = y_line.std(ddof=1)
+        y_line = (y_line - m) / s
+        y_low = (y_low - m) / s
+        y_high = (y_high - m) / s
+
+    ax.plot(x,y_line,label=label,color=color)
+    ax.fill_between(x,y_low,y_high,color=color,alpha=alpha,lw=0)
+
+    return
