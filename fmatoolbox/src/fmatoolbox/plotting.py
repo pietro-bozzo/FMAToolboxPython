@@ -87,34 +87,46 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, x = N
     return im
 
 
-def semPlot(x, y, alpha = 0.5, zscore: bool = False, color = None, label: str = None, ax: matpla.Axes = None):
+def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, label: str = None, ax: matpla.Axes = None):
     # plot mean +/- s.e.m. of matrix data
     #
     # arguments:
     #     x         (n) float, x coordinates
     #     y         (:,n) float, data to plot, each column corresponds to a value of x
+    #     ci        function, used to compute confidence intervals for every column of y, must have signature:  low, high = ci(y)
     #     alpha     float = 0.5, shaded area transparency value
-    #     zscore    bool = False, z-score w.r.t. average y
+    #     zscore    bool = False, if True, z-score w.r.t. average of y
     #     color     color = None
     #     label     str = None, legend label for line
     #     ax        Axes = plt.gca(), axes to plot in
 
     y = np.array(y)
 
+    if ci is None:
+        if y.shape[0] < 500:
+            ci = lambda x : spst.bootstrap((x,),np.mean,n_resamples=500,vectorized=True,paired=True).confidence_interval
+        else:
+            ci = lambda x : (x.mean(axis=0) - x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]), x.mean(axis=0) + x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]))
     if ax is None:
         ax = plt.gca()
 
     # statistic value for each column
     y_line = y.mean(axis=0)
     # statistic confidence interval for each column
-    y_low, y_high = spst.bootstrap((y,),np.mean,n_resamples=50,vectorized=True,paired=True).confidence_interval
+    y_low, y_high = ci(y)
 
+    # z-score
     if zscore:
+        # mean and standard deviation of average y
         m = y_line.mean()
         s = y_line.std(ddof=1)
+        # z-score s.e.m.
+        dy_low = (y_line - y_low) / s
+        dy_high = (y_high - y_line) / s
+        # z-score average
         y_line = (y_line - m) / s
-        y_low = (y_low - m) / s
-        y_high = (y_high - m) / s
+        y_low = y_line - dy_low
+        y_high = y_line + dy_high
 
     ax.plot(x,y_line,label=label,color=color)
     ax.fill_between(x,y_low,y_high,color=color,alpha=alpha,lw=0)
