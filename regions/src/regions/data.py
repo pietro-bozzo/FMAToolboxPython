@@ -341,7 +341,9 @@ class Regions:
         #     smooth    float = None, gaussian kernel std for smoothing over time
         #
         # output:
-        #     rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
+        #     sizes        (n) float, avalanche sizes
+        #     intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
+        #     size_t       (m) float, size over time, in which every avalanche is separated by a 0
 
         regs, states = self._checkIDs(regs,states,fuse=True)
 
