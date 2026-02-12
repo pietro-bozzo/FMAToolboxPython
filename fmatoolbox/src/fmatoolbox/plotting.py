@@ -56,17 +56,23 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[int] = [20,10]):
     return fig, axs
 
 
-def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, x = None, y = None, aspect = 3/4, ax = None):
+def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, zscore = None, x = None, y = None, aspect = 3/4, ax = None):
     # plot a colormap
     #
     # arguments:
     #     data      (:,:) float, data to plot
     #     vmin      float = None, colormap lower limit
     #     vmax      float = None, colormap upper limit
+    #     zscore    int | 'all' = None, if integer, z-score data along axis 'zscore', if 'all', z-score across whole matrix
     #     x         (:) float = None, x values corresponding to columns of data
-    #     y         (:) float = None, y values corresponding to columns of data
+    #     y         (:) float = None, y values corresponding to rows of data
     #     aspect    float = 3/4, image aspect ratio
     #     ax        Axes = plt.gca(), axes to plot in
+
+    if zscore is not None:
+        if zscore is 'all':
+            zscore = None
+        data = spst.zscore(data,axis=zscore)
 
     if x is None:
         x = [0,data.shape[1]]
