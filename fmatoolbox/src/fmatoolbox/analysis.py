@@ -24,7 +24,7 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     except Exception as e:
         raise e
     if step % 1 or step == 0:
-        raise(ValueError('\'step\' must be a non-zero integer'))
+        raise ValueError('\'step\' must be a non-zero integer')
     
     units = []
     if spikes.ndim == 1:

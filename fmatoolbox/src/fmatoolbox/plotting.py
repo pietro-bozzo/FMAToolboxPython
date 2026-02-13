@@ -6,6 +6,7 @@ import matplotlib.axes as matpla
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.stats as spst
+import scipy as sp
 
 
 def adjustAxes(axs: matpla.Axes):
@@ -56,7 +57,7 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[int] = [20,10]):
     return fig, axs
 
 
-def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, zscore = None, x = None, y = None, aspect = 3/4, ax = None):
+def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, zscore = None, xzoom = None, yzoom = None, x = None, y = None, aspect = 3/4, ax = None):
     # plot a colormap
     #
     # arguments:
@@ -69,18 +70,26 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, zscor
     #     aspect    float = 3/4, image aspect ratio
     #     ax        Axes = plt.gca(), axes to plot in
 
+    # store original shape in case data neds to be zoomed
+    n_y, n_x = data.shape
+
     if zscore is not None:
-        if zscore is 'all':
+        if zscore == 'all':
             zscore = None
         data = spst.zscore(data,axis=zscore)
 
+    if xzoom is not None or yzoom is not None:
+        xzoom = 1 if xzoom is None else xzoom
+        yzoom = 1 if yzoom is None else yzoom
+        data = sp.ndimage.zoom(data,(yzoom,xzoom))
+
     if x is None:
-        x = [0,data.shape[1]]
+        x = [0,n_x]
         dx = 0.5
     else:
-        dx = (x[-1] - x[0]) / (data.shape[1] - 1) / 2
+        dx = (x[-1] - x[0]) / (data.shape[1] - 1) / 2 # here use post-zoom shape
     if y is None:
-        y = [0,data.shape[0]]
+        y = [0,n_y]
         dy = 0.5
     else:
         dy = (y[-1] - y[0]) / (data.shape[0] - 1) / 2
