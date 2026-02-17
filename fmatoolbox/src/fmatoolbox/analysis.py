@@ -66,6 +66,51 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     return np.concatenate((time_bins,firing_rate),1)
 
 
+def MCpValue(surrogate, real, alternative='two-sided'):
+    """
+    Compute Monte Carlo p-values comparing real statistics to surrogate distributions
+
+    Parameters
+    ----------
+    surrogates : array_like, shape (n_surrogates, n_features)
+        surrogate statistics
+    real : array_like, shape (n_features,)
+        observed statistics
+    alternative : {"two-sided", "greater", "less"}
+        direction of the test
+
+    Returns
+    -------
+    pvals : ndarray, shape (n_features,)
+        Monte Carlo p-values
+    """
+
+    surrogate = np.asarray(surrogate)
+    real = np.asarray(real).ravel()
+    if surrogate.ndim != 2:
+        raise ValueError("surrogates must have shape (n_surrogates, n_features)")
+    if surrogate.shape[1] != real.shape[0]:
+        raise ValueError("real must have one element for every column of surrogates")
+    
+    if alternative == "greater":
+        count = np.sum(surrogate >= real, axis=0)
+
+    elif alternative == "less":
+        count = np.sum(surrogate <= real, axis=0)
+
+    elif alternative == "two-sided":
+        greater = np.sum(surrogate >= real, axis=0)
+        less = np.sum(surrogate <= real, axis=0)
+        count = 2 * np.minimum(greater, less)
+
+    else:
+        raise ValueError("alternative must be 'greater', 'less', or 'two-sided'")
+    
+    pvals = (count + 1) / (surrogate.shape[0] + 1) # +1 implement finite-sample Monte Carlo correction
+    
+    return np.minimum(pvals, 1.0)
+
+
 def PETH(samples,events,limits=[-0.5,0.5],n_bins=101):
     # compute peri-event time histogram of a signal relative to synchronizing events
     #
