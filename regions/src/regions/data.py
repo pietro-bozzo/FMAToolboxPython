@@ -29,6 +29,8 @@ class Regions:
         if events is None:
             events = []
         loaded_events = fmatoolbox.data.loadEvents(session,extra=states+events)
+        states = [s.rsplit('/',1)[-1] for s in states] # remove everything before '/' in every event
+        events = [e.rsplit('/',1)[-1] for e in events]
         # find session phases, if any
         phase_names = [name for name in loaded_events.keys() if name not in states and name not in events]
 
