@@ -23,6 +23,9 @@ def consolidateIntervals(intervals,epsilon=0):
     if (intervals[:,0] > intervals[:,1]).any():
         raise ValueError("rows of 'intervals' must be increasing")
     
+    if intervals.size == 0:
+        return intervals
+    
     # widen intervals
     if epsilon:
         intervals = intervals + np.array([-1,1])*epsilon
@@ -79,6 +82,9 @@ def intersectIntervals(intervals):
     # consolidate every interval set
     intervals = [consolidateIntervals(i) for i in intervals]
 
+    if intervals[0].size == 0:
+        return intervals[0]
+
     # flatten both sets
     a = intervals[0].flatten()
     b = intervals[1].flatten()
@@ -97,7 +103,7 @@ def intersectIntervals(intervals):
     ind = ind[keep_ind]
     a = a[keep_ind]
     if a.size == 0:
-        return np.array([[]])
+        return np.zeros((0,2))
 
     # odd_ind[i] is index of an odd element of ind, which will be replaced by a[odd_ind[i]]
     odd_ind = np.where(ind % 2)[0]
@@ -223,6 +229,8 @@ def subtractIntervals(a,b):
     # consolidate and flatten
     a = consolidateIntervals(a).flatten()
     b = consolidateIntervals(b).flatten()
+    if a.size == 0:
+        return a
 
     # ind[i] is odd iff a[i] falls in an interval of b
     ind = np.digitize(a,b)

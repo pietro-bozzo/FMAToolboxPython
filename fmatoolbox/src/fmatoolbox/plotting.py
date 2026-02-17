@@ -23,15 +23,15 @@ def adjustAxes(axs: matpla.Axes):
         ax.spines[['right','top']].set_visible(False)
 
         # adjust thickness and font size
-        ax.spines[['bottom','left']].set_linewidth(1.3)
-        ax.tick_params(width=1.3,labelsize=11)
-        ax.xaxis.label.set_fontsize(14)
-        ax.yaxis.label.set_fontsize(14)
+        ax.spines[['bottom','left']].set_linewidth(1)
+        ax.tick_params(width=1.3,labelsize=10)
+        ax.xaxis.label.set_fontsize(12)
+        ax.yaxis.label.set_fontsize(12)
 
     return
 
 
-def makeFigure(title: str, n: list[int] = [1,1], size: list[int] = [20,10]):
+def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10]):
     # make a figure
     #
     # arguments:
