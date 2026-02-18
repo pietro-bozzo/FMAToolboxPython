@@ -3,13 +3,14 @@
 import numpy as np
 
 
-def consolidateIntervals(intervals,epsilon=0):
+def consolidateIntervals(intervals,epsilon=0,duration=0):
     # remove overlaps in a set of intervals, yielding its most compact description (the union of its elements)
     # e.g., [[1,4],[2,6]] will become [1,6]
     #
     # arguments:
     #     intervals    (:,2) float, every row is [start time, stop time] for an interval (s)
-    #     epsilon      float, intervals with bounds closer than epsilon are also consolidated
+    #     epsilon      float = 0, intervals with bounds closer than epsilon are also consolidated
+    #     duration     float = 0, trim consolidated set of intervals so that it has given total duration
     #
     # output:
     #     intervals    (:,2) float, consolidated intervals (s)
@@ -56,6 +57,13 @@ def consolidateIntervals(intervals,epsilon=0):
     # re-shorten intervals
     if epsilon:
         intervals = intervals + np.array([1,-1])*epsilon
+
+    if duration:
+        cum_duration = np.cumsum(np.diff(intervals))
+        if cum_duration[-1] > duration:
+            idx = np.searchsorted(cum_duration,duration) + 1 # first interval where cumulative exceeds duration
+            intervals = intervals[:idx]
+            intervals[-1,1] -= cum_duration[idx-1] - duration
 
     return intervals
 
