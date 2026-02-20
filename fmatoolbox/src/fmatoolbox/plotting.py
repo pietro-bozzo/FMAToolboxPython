@@ -25,8 +25,8 @@ def adjustAxes(axs: matpla.Axes):
         # adjust thickness and font size
         ax.spines[['bottom','left']].set_linewidth(1)
         ax.tick_params(width=1.3,labelsize=10)
-        ax.xaxis.label.set_fontsize(12)
-        ax.yaxis.label.set_fontsize(12)
+        ax.xaxis.label.set_fontsize(11)
+        ax.yaxis.label.set_fontsize(11)
 
     return
 
@@ -54,6 +54,17 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10]):
     adjustAxes(axs)
 
     return fig, axs
+
+
+def saveFigure(fig,fname,format):
+
+    # promote single format to iterable
+    if isinstance(format,str):
+        format = [format]
+    for f in format:
+        fig.savefig(fname+'.'+f,transparent=True,bbox_inches='tight',format=f,dpi=200)
+
+    return
 
 
 def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, zscore = None, xzoom = None, yzoom = None, x = None, y = None, aspect = 3/4, ax = None):
