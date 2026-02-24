@@ -67,18 +67,37 @@ def saveFigure(fig,fname,format):
     return
 
 
-def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, zscore = None, xzoom = None, yzoom = None, x = None, y = None, aspect = 3/4, ax = None):
-    # plot a colormap
-    #
-    # arguments:
-    #     data      (:,:) float, data to plot
-    #     vmin      float = None, colormap lower limit
-    #     vmax      float = None, colormap upper limit
-    #     zscore    int | 'all' = None, if integer, z-score data along axis 'zscore', if 'all', z-score across whole matrix
-    #     x         (:) float = None, x values corresponding to columns of data
-    #     y         (:) float = None, y values corresponding to rows of data
-    #     aspect    float = 3/4, image aspect ratio
-    #     ax        Axes = plt.gca(), axes to plot in
+def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float = None, zscore = None, sortby = None, sortax: int = 0,
+                 xzoom: float = None, yzoom: float = None, x = None, y = None, aspect: float = 3/4, ax = None):
+    """
+    Plot a 2D array as a colormap with optional normalization, sorting, and resampling
+
+    Parameters
+    ----------
+    data : ndarray, shape (M, N)
+        two-dimensional array to visualize, rows correspond to first dimension
+    vmin, vmax : float, optional
+        lower / upper bound of the colormap, if None uses autoscale
+    zscore : {int, "all"}, optional
+        if integer, specifies axis along which to z-score `data`; if "all", compute z-scores over whole array;
+        if None, no normalization is applied
+    sortby : {"peak", callable}, optional
+        method used to sort `data` along `sortax` (after optional z-scoring), either:
+        - "peak", sort rows or columns by the index of their maximum value along the opposite axis.
+        - callable, must have signature ``f(data) -> array_like`` and return a 1D array used to sort data along `sortax`
+        - None, no sorting is performed
+    sortax : {0, 1}
+        axis along which sorting is applied
+    xzoom, yzoom : float, optional
+        horizontal / vertical resampling factor passed to ``scipy.ndimage.zoom`` (after sorting); if None,
+        no resampling is performed
+    x, y : ndarray, shape (L,), optional
+        coordinates corresponding to columns rows of `data`
+    aspect : float = 3/4
+        image aspect ratio
+    ax : matplotlib.axes.Axes, optional
+        Axes object in which to draw the plot; if None, uses ``matplotlib.pyplot.gca()``.
+    """
 
     # store original shape in case data neds to be zoomed
     n_y, n_x = data.shape
@@ -87,6 +106,12 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin = None, vmax = None, zscor
         if zscore == 'all':
             zscore = None
         data = spst.zscore(data,axis=zscore)
+
+    if sortby is not None:
+        if sortby == 'peak':
+            sortby = lambda x : np.argsort(np.argmax(x,1-sortax))
+        sort_idx = sortby(data)
+        data = data[sort_idx,:] if sortax == 0 else data[:,sort_idx]
 
     if xzoom is not None or yzoom is not None:
         xzoom = 1 if xzoom is None else xzoom
