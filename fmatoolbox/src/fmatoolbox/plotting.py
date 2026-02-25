@@ -24,9 +24,9 @@ def adjustAxes(axs: matpla.Axes):
 
         # adjust thickness and font size
         ax.spines[['bottom','left']].set_linewidth(1)
-        ax.tick_params(width=1.3,labelsize=10)
-        ax.xaxis.label.set_fontsize(11)
-        ax.yaxis.label.set_fontsize(11)
+        ax.tick_params(width=1.3,labelsize=8)
+        ax.xaxis.label.set_fontsize(9)
+        ax.yaxis.label.set_fontsize(9)
 
     return
 
@@ -62,7 +62,7 @@ def saveFigure(fig,fname,format):
     if isinstance(format,str):
         format = [format]
     for f in format:
-        fig.savefig(fname+'.'+f,transparent=True,bbox_inches='tight',format=f,dpi=200)
+        fig.savefig(fname+'.'+f,transparent=True,bbox_inches='tight',pad_inches=0,format=f,dpi=200)
 
     return
 
