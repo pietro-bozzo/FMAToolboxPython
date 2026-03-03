@@ -137,7 +137,7 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
     return im
 
 
-def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, label: str = None, ax: matpla.Axes = None):
+def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, label: str = None, lprop: dict = None, aprop: dict = None, ax: matpla.Axes = None):
     # plot mean +/- s.e.m. of matrix data
     #
     # arguments:
@@ -148,9 +148,20 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     #     zscore    bool = False, if True, z-score w.r.t. average of y
     #     color     color = None
     #     label     str = None, legend label for line
+    #     lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
+    #     aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between
     #     ax        Axes = plt.gca(), axes to plot in
-
+    
     y = np.array(y)
+
+    # default values
+    if lprop is None: lprop = {}
+    if aprop is None: aprop = {}
+    if 'color' not in lprop: lprop['color'] = color
+    if 'label' not in lprop: lprop['label'] = label
+    if not (set(['edgecolor','edgecolors','ec','facecolor','facecolors','fc','color']) & aprop.keys()): aprop['color'] = color
+    if 'alpha' not in aprop:  aprop['alpha'] = alpha
+    if 'lw' not in aprop: aprop['lw'] = 0
 
     if ci is None:
         if y.shape[0] < 500:
@@ -178,7 +189,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
         y_low = y_line - dy_low
         y_high = y_line + dy_high
 
-    ax.plot(x,y_line,label=label,color=color)
-    ax.fill_between(x,y_low,y_high,color=color,alpha=alpha,lw=0)
+    ax.plot(x,y_line,**lprop)
+    ax.fill_between(x,y_low,y_high,**aprop)
 
     return
