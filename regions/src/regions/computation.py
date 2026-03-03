@@ -25,7 +25,7 @@ def avalanchesFromProfile(x,threshold,time_step,t0=0):
     is_ok = np.concatenate(([True],(x[1:] != 0) | (x[:-1] != 0))) # is_ok[i] = 0 if i-th element is repeated zero
 
     # sizes
-    size_t = x[is_ok] * time_step # remove repeated zeros, obtaining size per bean: size over time
+    size_t = x[is_ok] * time_step # remove repeated zeros, obtaining size per bin: size over time
     sizes = np.bincount(np.cumsum(size_t==0) - (x[0] == 0), weights=size_t)
     # remove last zero
     if sizes[-1] == 0:
