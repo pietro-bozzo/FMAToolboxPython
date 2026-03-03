@@ -222,13 +222,15 @@ def readBatchFile(file_path: str):
     return sessions, args
 
 
-def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = [[]], ignore_args: bool = False, sessions: list[int] = None, verbose: bool = True) -> tuple[list, ...]:
+def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = None, kwargs: list[dict] = None, ignore_args: bool = False,
+             sessions: list[int] = None, verbose: bool = True) -> tuple[list, ...]:
     # run a routine on multiple sessions
     #
     # arguments:
     #     batch_file     string, path to batch file
     #     func           function to call for each session, must take session path as first arg
-    #     args           list of argument lists = [[]], one per session or a single list for all
+    #     args           list of list = [[]], positional arguments for 'func', one per session or a single list for all
+    #     kwargs         list of dict = [{}], keyword arguments for 'func', a dict per session or one for all
     #     ignore_args    bool = False, if True, ignore extra args from batch file
     #     sessions       (:) int = None, indices of session to process (default is all sessions from batch file)
     #     verbose:       bool = True, log progress
@@ -246,10 +248,18 @@ def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = [[]], igno
         extra_args = [[]] * n_sessions
     
     # validate optional arguments
+    if args is None:
+        args = [[]]
     if len(args) == 1:
         args = args * n_sessions
-    elif len(args) != 0 and len(args) != n_sessions:
-        raise ValueError("Argument 'args' must have one list per session")
+    elif len(args) != n_sessions:
+        raise ValueError("Argument 'args' must contain one list per session")
+    if kwargs is None:
+        kwargs = [{}]
+    if len(kwargs) == 1:
+        kwargs = kwargs * n_sessions
+    elif len(kwargs) != n_sessions:
+        raise ValueError("Argument 'kwargs' must contain one dict per session")
     
     verbose and print(f"\nStarting Batch, {datetime.datetime.now()} \n")
     n_outs = None
@@ -260,7 +270,7 @@ def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = [[]], igno
         verbose and print(f'Batch progress: {session}, {i+1} out of {n_sessions}')
         
         try:
-            result = func(session,*args[i],*extra_args[i])
+            result = func(session,*args[i],*extra_args[i],**kwargs[i])
 
             # allocate list for outputs
             if n_outs is None:
