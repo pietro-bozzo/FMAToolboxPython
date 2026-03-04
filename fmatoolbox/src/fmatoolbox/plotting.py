@@ -8,14 +8,20 @@ import scipy.stats as spst
 import scipy as sp
 
 
-def adjustAxes(axs: matpla.Axes):
+def adjustAxes(axs: matpla.Axes, format: str = 'paper'):
     # adjust axes properties to emprove figure appearance
     #
     # arguments:
-    #     axs    collection of matplotlib axes
+    #     axs        sequence of matplotlib.axes.Axes
+    #     format     {'paper','poster'}, controls font sizes and lines' width
 
     if isinstance(axs,matpla._axes.Axes):
         axs = [axs]
+
+    lw = 1 if format == 'paper' else 2
+    axw = 1.3 if format == 'paper' else 2
+    axtick = 8 if format == 'paper' else 12
+    axfont = 9 if format == 'paper' else 18
 
     for ax in axs:
         
@@ -23,35 +29,36 @@ def adjustAxes(axs: matpla.Axes):
         ax.spines[['right','top']].set_visible(False)
 
         # adjust thickness and font size
-        ax.spines[['bottom','left']].set_linewidth(1)
-        ax.tick_params(width=1.3,labelsize=8)
-        ax.xaxis.label.set_fontsize(9)
-        ax.yaxis.label.set_fontsize(9)
+        ax.spines[['bottom','left']].set_linewidth(lw)
+        ax.tick_params(width=axw,labelsize=axtick)
+        ax.xaxis.label.set_fontsize(axfont)
+        ax.yaxis.label.set_fontsize(axfont)
 
     return
 
 
-def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10]):
+def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], format: str = 'paper'):
     # make a figure
     #
     # arguments:
-    #     title    string, figure title
-    #     n        (2,1) int = [1,1], subplots number
-    #     size     (2,1) float = [20,10], figure size (cm)
+    #     title      string, figure title
+    #     n          (2,1) int = [1,1], subplots number
+    #     size       (2,1) float = [20,10], figure size (cm)
+    #     format     {'paper','poster'}, controls font sizes and lines' width
     #
     # output:
-    #     fig    matplotlib figure
-    #     axs    collection of matplotlib axes
+    #     fig        matplotlib figure
+    #     axs        sequence of matplotlib.axes.Axes
 
     cm = 1 / 2.54 # inches to centimeter conversion factor
     fig, axs = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True)
 
-    # promote single axis to iterable
+    # promote single axis to sequence
     if isinstance(axs,matpla._axes.Axes):
         axs = [axs]
 
     fig.suptitle(title)
-    adjustAxes(axs)
+    adjustAxes(axs,format)
 
     return fig, axs
 
@@ -157,12 +164,11 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     # default values
     if lprop is None: lprop = {}
     if aprop is None: aprop = {}
-    if 'color' not in lprop: lprop['color'] = color
-    if 'label' not in lprop: lprop['label'] = label
+    lprop.setdefault('color',color)
+    lprop.setdefault('label',label)
     if not (set(['edgecolor','edgecolors','ec','facecolor','facecolors','fc','color']) & aprop.keys()): aprop['color'] = color
-    if 'alpha' not in aprop:  aprop['alpha'] = alpha
-    if 'lw' not in aprop: aprop['lw'] = 0
-
+    aprop.setdefault('alpha',alpha)
+    aprop.setdefault('lw',0)
     if ci is None:
         if y.shape[0] < 500:
             ci = lambda x : spst.bootstrap((x,),np.mean,n_resamples=500,vectorized=True,paired=True).confidence_interval
