@@ -19,8 +19,8 @@ def adjustAxes(axs: matpla.Axes, format: str = 'paper'):
         axs = [axs]
 
     lw = 1 if format == 'paper' else 2
-    axw = 1.3 if format == 'paper' else 2
-    axtick = 8 if format == 'paper' else 12
+    axw = 1.3 if format == 'paper' else 2.1
+    axtick = 8 if format == 'paper' else 14
     axfont = 9 if format == 'paper' else 18
 
     for ax in axs:
@@ -44,13 +44,15 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], fo
     #     title      string, figure title
     #     n          (2,1) int = [1,1], subplots number
     #     size       (2,1) float = [20,10], figure size (cm)
-    #     format     {'paper','poster'}, controls font sizes and lines' width
+    #     format     {'paper','poster'}, increases figure size,font sizes, and axes lines' width
     #
     # output:
     #     fig        matplotlib figure
     #     axs        sequence of matplotlib.axes.Axes
 
     cm = 1 / 2.54 # inches to centimeter conversion factor
+    if format == 'poster':
+        size = [s*2.5 for s in size]
     fig, axs = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True)
 
     # promote single axis to sequence
@@ -61,6 +63,30 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], fo
     adjustAxes(axs,format)
 
     return fig, axs
+
+
+def set(axs: matpla.Axes,xtickcolors=None,xtickvisible=None,**kwargs):
+    # set multiple axes properties at once
+
+    # promote single axis to sequence
+    if isinstance(axs,matpla._axes.Axes):
+        axs = [axs]
+
+    for ax in axs:
+
+        if xtickcolors is not None:
+            for i, label in enumerate(ax.get_xticklabels()):
+                if i in xtickcolors:
+                    label.set_color(xtickcolors[i])
+
+        if xtickvisible is not None:
+            for i, tick in enumerate(ax.xaxis.get_major_ticks()):
+                if i in xtickvisible:
+                    tick.tick1line.set_visible(xtickvisible[i])
+
+        ax.set(**kwargs)
+
+    return
 
 
 def saveFigure(fig,fname,format):
