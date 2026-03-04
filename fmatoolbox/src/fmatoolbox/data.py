@@ -256,6 +256,8 @@ def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = None, kwar
         raise ValueError("Argument 'args' must contain one list per session")
     if kwargs is None:
         kwargs = [{}]
+    elif isinstance(kwargs,dict):
+        kwargs = [kwargs]
     if len(kwargs) == 1:
         kwargs = kwargs * n_sessions
     elif len(kwargs) != n_sessions:
