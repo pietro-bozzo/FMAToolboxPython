@@ -3,6 +3,7 @@
 import numpy as np
 import numpy.typing as npt
 import matplotlib.axes as matpla
+import matplotlib.colors
 import matplotlib.pyplot as plt
 import scipy.stats as spst
 import scipy as sp
@@ -17,6 +18,8 @@ def adjustAxes(axs: matpla.Axes, format: str = 'paper'):
 
     if isinstance(axs,matpla._axes.Axes):
         axs = [axs]
+    elif isinstance(axs,np.ndarray):
+        axs = axs.ravel()
 
     lw = 1 if format == 'paper' else 2
     axw = 1.3 if format == 'paper' else 2.1
@@ -44,7 +47,7 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], fo
     #     title      string, figure title
     #     n          (2,1) int = [1,1], subplots number
     #     size       (2,1) float = [20,10], figure size (cm)
-    #     format     {'paper','poster'}, increases figure size,font sizes, and axes lines' width
+    #     format     {'paper','poster'}, increases figure size, font sizes, and axes lines' width
     #
     # output:
     #     fig        matplotlib figure
@@ -65,7 +68,7 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], fo
     return fig, axs
 
 
-def set(axs: matpla.Axes,xtickcolors=None,xtickvisible=None,**kwargs):
+def setProp(axs: matpla.Axes,xtickcolors=None,xtickvisible=None,**kwargs):
     # set multiple axes properties at once
 
     # promote single axis to sequence
@@ -223,5 +226,86 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
 
     ax.plot(x,y_line,**lprop)
     ax.fill_between(x,y_low,y_high,**aprop)
+
+    return
+
+
+def boxPlot(data, x = None, color = None, ax: matpla.Axes = None):
+
+    if ax is None:
+        ax = plt.gca()
+
+    lw = ax.spines["left"].get_linewidth() * 0.8
+
+    medianprops = {'linewidth': lw}      
+    boxprops = {'linewidth': lw}
+    if color is not None:
+        medianprops['color'] = color
+        boxprops['color'] = color
+        r, g, b, a = matplotlib.colors.to_rgba(color)
+        boxprops['facecolor'] = (r, g, b, a*0.3)
+    flierprops={'marker':'.', 'markerfacecolor': 'black'}
+
+    ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
+               capprops={'linewidth':lw},flierprops=flierprops)
+
+    return
+
+
+def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax: matpla.Axes = None):
+    # draw horizontal bars indicating significant differences between distributions
+    #
+    # arguments:
+    #     p        (n,3) float, each row is [i,j,pij], where pij is the p value for a test comparing i-th and j-th populations
+    #     x        (n,) float = range(n), x coordinates for populations
+    #     alpha    float = 0.05, false-discovery tolerance level
+    #     dy       float = 1, scale vertical distances between bars
+    #     draw     (4,) bool = [False,True,True,True], draw flags for [n.s., *, **, ***]
+    #     ax       matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+
+    p = np.array(p,ndmin=2)
+    x = np.arange(p.shape[0]) if x is None else np.asarray(x)
+    if ax is None:
+        ax = plt.gca()
+    
+    dx = np.diff(ax.get_xlim())[0] / 500
+    y_lim = ax.get_ylim()
+    height = y_lim[1]
+    dy = np.diff(y_lim)[0] / 80 * dy
+
+    # sort according to distance: nearby pairs first, then second neighbours and so on
+    distances = np.round(np.diff(x[p[:,0:2].astype(int)],axis=1).ravel(),10)
+    order = np.lexsort((x[p[:,0]],distances))
+    p = p[order]
+
+    # significance level
+    h = p[:,2].copy()
+    if alpha != -1:
+        h[p[:,2] < alpha] = 1
+        h[p[:,2] < alpha/5] = 2
+        h[p[:,2] < alpha/50] = 3
+        h[p[:,2] >= alpha] = 0
+
+    def _plot_line(ax, x, y, dy, p, last_p, t):
+        if last_p > p[0]: # increase height not to overlap lines
+            y = y + dy*3.5
+        ax.plot([x[0],x[0],x[1],x[1]], [y-dy,y,y,y-dy], color='k')
+        ax.text(np.mean(x),y+0.8*dy,t,ha='center',va='center',color='k')
+        last_p = p[1]
+        return y, last_p
+
+    last_i = -np.inf
+    for i in range(len(p)):
+        x_coord = [x[int(p[i,0])]+dx, x[int(p[i,1])]-dx]
+        if h[i] == 3 and draw[3]:
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'***')
+        elif h[i] >= 2 and draw[2]:
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'**')
+        elif h[i] >= 1 and draw[1]:
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'*')
+        elif h[i] == 0 and draw[0]:
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'n. s.')
+
+    ax.set_ylim(y_lim[0],height+dy*5)
 
     return
