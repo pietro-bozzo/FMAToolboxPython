@@ -2,21 +2,24 @@
 
 import numpy as np
 import numpy.typing as npt
-import matplotlib.axes as matpla
-import matplotlib.colors
+import matplotlib.axes as mpla
+import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
+import matplotlib.typing as mplt
 import scipy.stats as spst
 import scipy as sp
+from collections.abc import Iterable
+from typing import Literal
 
 
-def adjustAxes(axs: matpla.Axes, format: str = 'paper'):
+def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
     # adjust axes properties to emprove figure appearance
     #
     # arguments:
-    #     axs        sequence of matplotlib.axes.Axes
+    #     axs        iterable of matplotlib.axes.Axes
     #     format     {'paper','poster'}, controls font sizes and lines' width
 
-    if isinstance(axs,matpla._axes.Axes):
+    if isinstance(axs,mpla._axes.Axes):
         axs = [axs]
     elif isinstance(axs,np.ndarray):
         axs = axs.ravel()
@@ -40,18 +43,18 @@ def adjustAxes(axs: matpla.Axes, format: str = 'paper'):
     return
 
 
-def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], format: str = 'paper'):
+def makeFigure(title:str, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], format:Literal['paper','poster']='paper'):
     # make a figure
     #
     # arguments:
     #     title      string, figure title
-    #     n          (2,1) int = [1,1], subplots number
+    #     n          (2,1) int = [1,1], number of subplots rows and columns
     #     size       (2,1) float = [20,10], figure size (cm)
     #     format     {'paper','poster'}, increases figure size, font sizes, and axes lines' width
     #
     # output:
     #     fig        matplotlib figure
-    #     axs        sequence of matplotlib.axes.Axes
+    #     axs        iterable of matplotlib.axes.Axes
 
     cm = 1 / 2.54 # inches to centimeter conversion factor
     if format == 'poster':
@@ -59,7 +62,7 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], fo
     fig, axs = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True)
 
     # promote single axis to sequence
-    if isinstance(axs,matpla._axes.Axes):
+    if isinstance(axs,mpla._axes.Axes):
         axs = [axs]
 
     fig.suptitle(title)
@@ -68,19 +71,25 @@ def makeFigure(title: str, n: list[int] = [1,1], size: list[float] = [20,10], fo
     return fig, axs
 
 
-def setProp(axs: matpla.Axes,xtickcolors=None,xtickvisible=None,**kwargs):
+def setProp(axs:Iterable[mpla.Axes], xlabelcolor:dict[int,mplt.ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
     # set multiple axes properties at once
+    #
+    # arguments:
+    #     axs             iterable of matplotlib.axes.Axes
+    #     xlabelcolor     dict of {index: color}, color for the i-th xlabel, where index is i
+    #     xtickvisible    dict of {index: bool}, whether to show the i-th major xtick, where index is i
+    #     **kwargs        all extra key-word arguments are passed to matplotlib.pyplot.set()
 
     # promote single axis to sequence
-    if isinstance(axs,matpla._axes.Axes):
+    if isinstance(axs,mpla._axes.Axes):
         axs = [axs]
 
     for ax in axs:
 
-        if xtickcolors is not None:
+        if xlabelcolor is not None:
             for i, label in enumerate(ax.get_xticklabels()):
-                if i in xtickcolors:
-                    label.set_color(xtickcolors[i])
+                if i in xlabelcolor:
+                    label.set_color(xlabelcolor[i])
 
         if xtickvisible is not None:
             for i, tick in enumerate(ax.xaxis.get_major_ticks()):
@@ -105,35 +114,21 @@ def saveFigure(fig,fname,format):
 
 def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float = None, zscore = None, sortby = None, sortax: int = 0,
                  xzoom: float = None, yzoom: float = None, x = None, y = None, aspect: float = 3/4, ax = None):
-    """
-    Plot a 2D array as a colormap with optional normalization, sorting, and resampling
-
-    Parameters
-    ----------
-    data : ndarray, shape (M, N)
-        two-dimensional array to visualize, rows correspond to first dimension
-    vmin, vmax : float, optional
-        lower / upper bound of the colormap, if None uses autoscale
-    zscore : {int, "all"}, optional
-        if integer, specifies axis along which to z-score `data`; if "all", compute z-scores over whole array;
-        if None, no normalization is applied
-    sortby : {"peak", callable}, optional
-        method used to sort `data` along `sortax` (after optional z-scoring), either:
-        - "peak", sort rows or columns by the index of their maximum value along the opposite axis.
-        - callable, must have signature ``f(data) -> array_like`` and return a 1D array used to sort data along `sortax`
-        - None, no sorting is performed
-    sortax : {0, 1}
-        axis along which sorting is applied
-    xzoom, yzoom : float, optional
-        horizontal / vertical resampling factor passed to ``scipy.ndimage.zoom`` (after sorting); if None,
-        no resampling is performed
-    x, y : ndarray, shape (L,), optional
-        coordinates corresponding to columns rows of `data`
-    aspect : float = 3/4
-        image aspect ratio
-    ax : matplotlib.axes.Axes, optional
-        Axes object in which to draw the plot; if None, uses ``matplotlib.pyplot.gca()``.
-    """
+    # plot a 2D array as a colormap with optional normalization, sorting, and resampling
+    #
+    # arguments:
+    #     data            (n,m) float, data to visualize, rows correspond to first dimension
+    #     vmin, vmax      float = None, lower / upper bound of the colormap, if None uses autoscale
+    #     zscore          int | 'all' = None, if int, specifies axis along which to z-score `data`; if 'all', compute z-score over whole array,
+    #                     if None, no normalization is applied
+    #     sortby          callable | 'peak' = None, optional method used to sort `data` along `sortax` (after optional z-scoring), either:
+    #                     - 'peak', sort rows or columns by the index of their maximum value along the opposite axis.
+    #                     - callable, must have signature ``f(data) -> array_like`` and return a 1D array used to sort data along `sortax`
+    #     sortax          int = 0, axis along which sorting is performed
+    #     xzoom, yzoom    float = None, optional horizontal / vertical resampling factor passed to ``scipy.ndimage.zoom`` (after sorting)
+    #     x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
+    #     aspect          float = 3/4, image aspect ratio
+    #     ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
 
     # store original shape in case data neds to be zoomed
     n_y, n_x = data.shape
@@ -173,7 +168,7 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
     return im
 
 
-def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, label: str = None, lprop: dict = None, aprop: dict = None, ax: matpla.Axes = None):
+def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, label: str = None, lprop: dict = None, aprop: dict = None, ax: mpla.Axes = None):
     # plot mean +/- s.e.m. of matrix data
     #
     # arguments:
@@ -186,7 +181,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     #     label     str = None, legend label for line
     #     lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
     #     aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between
-    #     ax        Axes = plt.gca(), axes to plot in
+    #     ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     
     y = np.array(y)
 
@@ -230,7 +225,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     return
 
 
-def boxPlot(data, x = None, color = None, ax: matpla.Axes = None):
+def boxPlot(data, x = None, color = None, ax:mpla.Axes=None):
 
     if ax is None:
         ax = plt.gca()
@@ -242,7 +237,7 @@ def boxPlot(data, x = None, color = None, ax: matpla.Axes = None):
     if color is not None:
         medianprops['color'] = color
         boxprops['color'] = color
-        r, g, b, a = matplotlib.colors.to_rgba(color)
+        r, g, b, a = mplc.to_rgba(color)
         boxprops['facecolor'] = (r, g, b, a*0.3)
     flierprops={'marker':'.', 'markerfacecolor': 'black'}
 
@@ -252,7 +247,7 @@ def boxPlot(data, x = None, color = None, ax: matpla.Axes = None):
     return
 
 
-def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax: matpla.Axes = None):
+def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axes=None):
     # draw horizontal bars indicating significant differences between distributions
     #
     # arguments:
