@@ -26,8 +26,8 @@ def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'
 
     lw = 1 if format == 'paper' else 2
     axw = 1.3 if format == 'paper' else 2.1
-    axtick = 8 if format == 'paper' else 14
-    axfont = 9 if format == 'paper' else 18
+    axtick = 9 if format == 'paper' else 14
+    axfont = 10 if format == 'paper' else 18
 
     for ax in axs:
         
@@ -107,7 +107,7 @@ def saveFigure(fig,fname,format):
     if isinstance(format,str):
         format = [format]
     for f in format:
-        fig.savefig(fname+'.'+f,transparent=True,bbox_inches='tight',pad_inches=0,format=f,dpi=200)
+        fig.savefig(str(fname)+'.'+f,transparent=True,bbox_inches='tight',pad_inches=0,format=f,dpi=200)
 
     return
 
@@ -231,6 +231,7 @@ def boxPlot(data, x = None, color = None, ax:mpla.Axes=None):
         ax = plt.gca()
 
     lw = ax.spines["left"].get_linewidth() * 0.8
+    mksz = ax.spines["left"].get_linewidth() * 2
 
     medianprops = {'linewidth': lw}      
     boxprops = {'linewidth': lw}
@@ -238,8 +239,8 @@ def boxPlot(data, x = None, color = None, ax:mpla.Axes=None):
         medianprops['color'] = color
         boxprops['color'] = color
         r, g, b, a = mplc.to_rgba(color)
-        boxprops['facecolor'] = (r, g, b, a*0.3)
-    flierprops={'marker':'.', 'markerfacecolor': 'black'}
+        boxprops['facecolor'] = (r, g, b, a*0.2)
+    flierprops={'marker':'.', 'markerfacecolor': 'black', 'markersize': mksz}
 
     ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
                capprops={'linewidth':lw},flierprops=flierprops)
@@ -266,7 +267,7 @@ def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axe
     dx = np.diff(ax.get_xlim())[0] / 500
     y_lim = ax.get_ylim()
     height = y_lim[1]
-    dy = np.diff(y_lim)[0] / 80 * dy
+    dy = np.diff(y_lim)[0] / 30 * dy
 
     # sort according to distance: nearby pairs first, then second neighbours and so on
     distances = np.round(np.diff(x[p[:,0:2].astype(int)],axis=1).ravel(),10)
@@ -281,11 +282,13 @@ def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axe
         h[p[:,2] < alpha/50] = 3
         h[p[:,2] >= alpha] = 0
 
+    lw = ax.spines["left"].get_linewidth()
+    fontsz = ax.xaxis.label.get_fontsize() * .8
     def _plot_line(ax, x, y, dy, p, last_p, t):
         if last_p > p[0]: # increase height not to overlap lines
             y = y + dy*3.5
-        ax.plot([x[0],x[0],x[1],x[1]], [y-dy,y,y,y-dy], color='k')
-        ax.text(np.mean(x),y+0.8*dy,t,ha='center',va='center',color='k')
+        ax.plot([x[0],x[0],x[1],x[1]],[y-dy,y,y,y-dy],color='k',lw=lw)
+        ax.text(np.mean(x),y+0.8*dy,t,ha='center',va='center',color='k',size=fontsz)
         last_p = p[1]
         return y, last_p
 
