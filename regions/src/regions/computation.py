@@ -34,6 +34,6 @@ def avalanchesFromProfile(x,threshold,time_step,t0=0):
     #  start and stop times
     start = np.where(np.concatenate(([x[0] != 0], (x[1:] != 0) & (x[:-1] == 0))))[0]
     stop = np.where(np.concatenate(((x[1:] == 0) & (x[:-1] != 0), [x[-1] != 0])))[0] + 1
-    intervals = np.stack((start,stop),1) * time_step + t0
+    intervals = np.stack((start,stop),1) * time_step + t0 - time_step/2
 
     return sizes, intervals, size_t
