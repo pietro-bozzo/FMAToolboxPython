@@ -122,6 +122,9 @@ def loadEvents(session: str, extra: list[str]):
 
     session = pathlib.Path(session)
     file_root = session.parent
+    # accept single string input
+    if isinstance(extra,str):
+        extra = [extra]
 
     # load all *.evt files
     events = {}
