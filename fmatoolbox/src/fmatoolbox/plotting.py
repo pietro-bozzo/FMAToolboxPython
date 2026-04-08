@@ -225,10 +225,19 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     return
 
 
-def boxPlot(data, x = None, color = None, ax:mpla.Axes=None):
+def boxPlot(data, x=None, color=None, ax:mpla.Axes=None):
 
     if ax is None:
         ax = plt.gca()
+
+    # remove nans
+    if isinstance(data,np.ndarray):
+        if data.ndim == 1:
+            data = data[~np.isnan(data)]
+        else:
+            data = [column[~np.isnan(column)] for column in data.T]
+    else:
+        data = [np.array(d)[~np.isnan(d)] for d in data]
 
     lw = ax.spines["left"].get_linewidth() * 0.8
     mksz = ax.spines["left"].get_linewidth() * 2
