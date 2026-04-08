@@ -295,10 +295,15 @@ def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = None, kwar
         except Exception as e:
             errors += 1
             print(f'Error in session {session}')
-            print(f'{str(e)}')
-            print('Stacktrace:')
-            traceback.print_exc()
-            print()
+            print(str(e))
+            print('Traceback:')
+            tb = e.__traceback__
+            RED = "\033[31m"
+            RESET = "\033[0m"
+            while tb:
+                fcode = tb.tb_frame.f_code
+                print(f'{RED}{fcode.co_filename}, line {tb.tb_lineno}, in {fcode.co_name}{RESET}')
+                tb = tb.tb_next
         
         verbose and print()
     
