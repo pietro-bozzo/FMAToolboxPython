@@ -1,6 +1,7 @@
 ''' Specialized analyses for FMAToolbox '''
 
 import numpy as np
+from numpy.ma.core import squeeze
 from scipy.ndimage import gaussian_filter
 import statsmodels.stats.multitest
 from typing import Callable
@@ -68,12 +69,14 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     return np.concatenate((time_bins,firing_rate),1)
 
 
-def PETH(samples,events,limits=[-0.5,0.5],n_bins=101):
+def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101):
     # compute peri-event time histogram of a signal relative to synchronizing events
     #
     # arguments:
     #     samples    (:,:) float, every row is either [time stamps] (s) or [time stamps, value]
-    #     events     (n) float, synchronizing events' times, CHECK WHAT HAPPENS FOR NON SORTED WITH 2 COLS SAMPLES
+    #     events     (:) float, synchronizing events' times, CHECK WHAT HAPPENS FOR NON SORTED WITH 2 COLS SAMPLES
+    #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for vector samples)
+    #     g_range    (2) int = [0,max(groups)], min and max group id
     #     limit      (2) float = [-0.5,0.5] (s), defines window around events to compute PETH
     #     n_bins     float = 101, number of time bins around event times
     #
@@ -82,11 +85,23 @@ def PETH(samples,events,limits=[-0.5,0.5],n_bins=101):
     #     t          (1,n_bins) float, times (s)
     #     m          (n,1) float, average samples across events
 
-    try:
-        samples = np.array(samples)
-        events = np.array(events)
-    except Exception as e:
-        raise e
+    samples = np.array(samples,ndmin=1)
+    events = np.asarray(events)
+    squeeze = True
+    if groups is None:
+        groups = np.zeros(samples.shape[0],dtype=int)
+        n_groups = 1
+        g_range = None
+    else:
+        groups = np.array(groups,ndmin=1,dtype=int)
+        if samples.shape[0] != groups.shape[0]:
+            raise ValueError("samples and groups must have the same length")
+        n_groups = groups.max() + 1
+        squeeze = False
+    if g_range is not None:
+        groups = groups[(groups >= g_range[0]) & (groups <= g_range[1])]
+        groups -= int(g_range[0])
+        n_groups -= int(g_range[0])
     
     # sort by time
     samples = np.sort(samples) if samples.ndim == 1 else samples[samples[:,0].argsort()]
@@ -100,7 +115,7 @@ def PETH(samples,events,limits=[-0.5,0.5],n_bins=101):
         bin_width = np.diff(limits) / n_bins
 
         events = np.sort(events,axis=None) # to use searchsorted
-        mat = np.zeros((events.size,n_bins),dtype=int)
+        mat = np.zeros((events.size,n_bins,n_groups),dtype=int)
         for i, e in enumerate(events):
 
             # find where event falls in samples
@@ -109,8 +124,12 @@ def PETH(samples,events,limits=[-0.5,0.5],n_bins=101):
             if left < right:
                 distance = samples[left:right] - e
                 bin_ind = ((distance-limits[0])/bin_width).astype(int)
-                bin_ind = bin_ind[(bin_ind >= 0) & (bin_ind < n_bins)]
-                np.add.at(mat[i],bin_ind,1)
+                bin_ind[bin_ind < 0] = 0
+                bin_ind[bin_ind >= n_bins] = n_bins - 1
+                np.add.at(mat,(i,bin_ind,groups[left:right]),1)
+
+        if squeeze:
+            mat = mat.reshape((mat.shape[:2]))
 
     # 2: time series
     else:
