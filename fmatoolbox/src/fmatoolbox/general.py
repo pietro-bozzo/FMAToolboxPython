@@ -8,7 +8,7 @@ def consolidateIntervals(intervals,epsilon=0,duration=0):
     # e.g., [[1,4],[2,6]] will become [1,6]
     #
     # arguments:
-    #     intervals    (:,2) float, every row is [start time, stop time] for an interval (s)
+    #     intervals    (:,2) float, rows are [start, stop] times for an interval (s); if 1d, reshaped to (1,2)
     #     epsilon      float = 0, intervals with bounds closer than epsilon are also consolidated
     #     duration     float = 0, trim consolidated set of intervals so that it has given total duration
     #
@@ -138,8 +138,8 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
     # keep only samples falling in a set of intervals
     #
     # arguments:
-    #     samples      (n,m) float, every row is [time stamp, value1, value2, …]
-    #     intervals    (l,2) float, every row is [start time, stop time] for an interval
+    #     samples      (:,:,) float, rows are [time stamp, value1, value2, ...]; if 1d, reshaped to (:,1)
+    #     intervals    (:,2) float, rows are [start, stop] times for an interval; if 1d, reshaped to (1,2)
     #     shift        bool = False, if True, shift remaining epochs together in time
     #     s_ind        bool = False, if True, return also Is
     #     i_ind        bool = False, if True, return also Ii
@@ -149,10 +149,7 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
     #     Is           (n) bool, optional, indicese of original samples which were kept
     #     Ii           (n) bool, optional, indicese of intervals which contain kept samples
 
-    try:
-        samples = np.array(samples)
-    except Exception as e:
-        raise TypeError("'samples' must be convertible to a NumPy array") from e
+    samples = np.asarray(samples)
     
     # promote 1d arrays to 2d
     if samples.ndim == 1:
@@ -181,46 +178,81 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
     return out[:2+i_ind:2-s_ind]
 
 
-def shuffleEvents(events,offset=0):
+def unshift(samples,intervals):
+    # perform the opposite operation of option 'shift' in restrict
+    #
+    # arguments:
+    #     samples      (:,:,) float, rows are [time stamp, value1, value2, ...]; if 1d, reshaped to (:,1)
+    #     intervals    (:,2) float, rows are [start, stop] times (s) for an interval, previously used to shift `samples`
+
+    samples = np.asarray(samples,dtype=float)
+    intervals = np.array(intervals,ndmin=2)
+    # promote 1d arrays to 2d
+    if samples.ndim == 1:
+        samples = samples.reshape((-1, 1))
+
+    shifted_end = np.cumsum(np.diff(intervals,axis=1).flatten())
+    shifted_start = np.concatenate(([0],shifted_end[:-1]))
+    shifted_intervals = np.column_stack((shifted_start,shifted_end))
+
+    to_add = intervals[:,0] - shifted_start # offset to add to each sample
+    _, is_ok, int_ind = restrict(samples[:,0],shifted_intervals,s_ind=True,i_ind=True)
+
+    samples[~is_ok,0] = np.nan
+    samples[is_ok,0] += to_add[int_ind]
+
+    return samples
+
+
+def shuffleEvents(events,offset=0,intervals=None):
     # shuffle events preserving their inter-event interval
     #
     # arguments:
-    #     events      (:,n) float, every row is either [event time] or [event time, event id]
-    #     offset      float = 0 s, reference time, necessary when events start at a time != 0, e.g., for a portion of a recording
-    #                 in [1000 s, 3000 s]; must be smaller than first event time
+    #     events       (n,) or (:,n) float, every row is either [event time] or [event time, event id]; if 1d, interpreted as (:,1)
+    #     offset       float = 0 s, reference time, necessary when events start at a time != 0, e.g., for a portion of a recording
+    #                  in [1000 s, 3000 s]; must be smaller than first event time, ignored if 'intervals' are provided
+    #     intervals    (:,2) float = None, rows are [start, stop] times of intervals; if 1d, reshaped to (1,2)
     #
     # output:
-    #     shuffled    (:,n) float, shuffled events
+    #     shuffled     (n,) or (:,n) float, shuffled events
 
-    try:
-        events = np.array(events)
-    except Exception as e:
-        raise TypeError("'events' must be convertible to a NumPy array") from e
+    events = np.asarray(events)
+    if intervals is not None:
+        intervals = np.array(intervals,ndmin=2)
+        n_dim = events.ndim
+        events = restrict(events,intervals,shift=True)
+        offset = 0
     
-    # 1. single column input (only timestamps)
+    # 1. single-column input (only timestamps)
     if events.ndim == 1 or events.shape[1] == 1:
 
         # compute and shuffle inter-event intervals
         inter_event_intervals = np.diff(events,prepend=offset,axis=0)
         inter_event_intervals = np.random.permutation(inter_event_intervals)
-        shuffled = offset + np.cumsum(inter_event_intervals,axis=0)
-        return shuffled
+        shuffled = offset + np.cumsum(inter_event_intervals,axis=0) # CHECK if shuffled is 1d !!!
 
     # 2: multiple columns (also grouping ids)
-    times = events[:,0].reshape((-1,1))
-    ids = events[:,1:]
-    unique_ids = np.unique(ids,axis=0)
+    else:
 
-    shuffled = []
-    for i in unique_ids:
-        # compute and shuffle inter-event intervals per group
-        inter_event_intervals = np.diff(times[(ids==i).all(1)],axis=0,prepend=offset)
-        inter_event_intervals = np.random.permutation(inter_event_intervals)
-        shuffled.append(np.concatenate((offset+np.cumsum(inter_event_intervals,axis=0),np.repeat(i.reshape((1,-1)),len(inter_event_intervals),axis=0)),axis=1))
+        times = events[:,0].reshape((-1,1))
+        ids = events[:,1:]
+        unique_ids = np.unique(ids,axis=0)
 
-    # sort by time
-    shuffled = np.concatenate(shuffled)
-    shuffled = shuffled[shuffled[:,0].argsort()]
+        shuffled = []
+        for i in unique_ids:
+            # compute and shuffle inter-event intervals per group
+            inter_event_intervals = np.diff(times[(ids==i).all(1)],axis=0,prepend=offset)
+            inter_event_intervals = np.random.permutation(inter_event_intervals)
+            shuffled.append(np.concatenate((offset+np.cumsum(inter_event_intervals,axis=0),np.repeat(i.reshape((1,-1)),len(inter_event_intervals),axis=0)),axis=1))
+
+        # sort by time
+        shuffled = np.concatenate(shuffled)
+        shuffled = shuffled[shuffled[:,0].argsort()]
+
+    if intervals is not None:
+        shuffled = unshift(shuffled,intervals)
+        if n_dim == 1:
+            shuffled = shuffled.ravel()
 
     return shuffled
 
