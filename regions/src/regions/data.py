@@ -26,8 +26,12 @@ class Regions:
         self.all_events = phases is None
         if states is None:
             states = []
+        elif isinstance(states,str):
+            states = [states]
         if events is None:
             events = []
+        elif isinstance(events,str):
+            events = [events]
         loaded_events = fmatoolbox.data.loadEvents(session,extra=states+events)
         states = [s.rsplit('/',1)[-1] for s in states] # remove everything before '/' in every event
         events = [e.rsplit('/',1)[-1] for e in events]
