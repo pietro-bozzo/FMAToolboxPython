@@ -10,6 +10,7 @@ import traceback
 import re
 import fmatoolbox.exceptions
 import collections
+import concurrent.futures
 
 
 def loadSpikeTimes(session: str, output: str = 'dict', return_elec: bool = False, return_loc: bool = False):
@@ -225,8 +226,18 @@ def readBatchFile(file_path: str):
     return sessions, args
 
 
-def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = None, kwargs: list[dict] = None, ignore_args: bool = False,
-             sessions: list[int] = None, verbose: bool = True) -> tuple[list, ...]:
+def _batchWorker(payload):
+    # private function to unpack payload and dispatch it to `func` inside runBatc
+    i, func, session, args, extra_args, kwargs = payload
+    try:
+        result = func(session,*args,*extra_args,**kwargs)
+        return i, result
+    except Exception as e:
+        return -i-1, e
+
+
+def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:list[dict]=None, ignore_args:bool=False,
+             sessions:list[int]=None, parallel:bool=False, verbose:bool=True) -> tuple[list, ...]:
     # run a routine on multiple sessions
     #
     # arguments:
@@ -234,8 +245,9 @@ def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = None, kwar
     #     func           function to call for each session, must take session path as first arg
     #     args           list of list = [[]], positional arguments for 'func', one per session or a single list for all
     #     kwargs         list of dict = [{}], keyword arguments for 'func', a dict per session or one for all
-    #     ignore_args    bool = False, if True, ignore extra args from batch file
+    #     ignore_args    bool = False, if True, ignore extra arguments from batch file
     #     sessions       (:) int = None, indices of session to process (default is all sessions from batch file)
+    #     parallel       bool = False, parallelize calls of `func` with concurrent.futures
     #     verbose:       bool = True, log progress
     #        
     # output:
@@ -267,46 +279,67 @@ def runBatch(batch_file: str, func: Callable, args: list[list[Any]] = None, kwar
         raise ValueError("Argument 'kwargs' must contain one dict per session")
     
     verbose and print(f"\nStarting Batch, {datetime.datetime.now()} \n")
-    n_outs = None
-    outputs = [None] * n_sessions
-    errors = 0
-    for i, session in enumerate(sessions_list):
+    results = [None] * n_sessions
+    errors = {}
+    RED = "\033[31m"
+    RESET = "\033[0m"
 
-        verbose and print(f'Batch progress: {session}, {i+1} out of {n_sessions}')
-        
-        try:
-            result = func(session,*args[i],*extra_args[i],**kwargs[i])
+    # 1. Serial Batch
+    if not parallel:
+        for i, session in enumerate(sessions_list):
+            verbose and print(f'Batch progress: {session}, {i+1} out of {n_sessions}')
+            try:
+                results[i] = func(session,*args[i],*extra_args[i],**kwargs[i])
+            except Exception as e:
+                # log error to console
+                errors[-i-1] = e
+                print(f'Error in session {session}\n{str(e)}\nTraceback:')
+                tb = e.__traceback__
+                while tb:
+                    fcode = tb.tb_frame.f_code
+                    print(f'{RED}{fcode.co_filename}, line {tb.tb_lineno}, in {fcode.co_name}{RESET}')
+                    tb = tb.tb_next
+            verbose and print()
 
-            # allocate list for outputs
-            if n_outs is None:
-                if isinstance(result, tuple):
-                    n_outs = len(result)
-                    outputs = [outputs.copy() for _ in range(n_outs)]
+    # 2. Parallel Batch
+    else:
+        # pack arguments into payloads
+        payloads = [(i,func,s,args[i],extra_args[i],kwargs[i]) for i, s in enumerate(sessions_list)]
+        with concurrent.futures.ProcessPoolExecutor() as ex:
+            for i, result in ex.map(_batchWorker, payloads):
+                if i >= 0:
+                    results[i] = result
                 else:
-                    n_outs = 0 # 0 marks the single output case
-
-            # assign outputs
-            if n_outs == 0:
-                outputs[i] = result
-            else:
-                for j in range(n_outs):
-                    outputs[j][i] = result[j]
-                
-        except Exception as e:
-            errors += 1
-            print(f'Error in session {session}')
-            print(str(e))
-            print('Traceback:')
+                    errors[i] = result
+        # log errors to console
+        for i, e in errors.items():
+            print(f'Error in session {sessions_list[-i-1]} ({-i-1})\n{str(e)}\nTraceback:')
             tb = e.__traceback__
-            RED = "\033[31m"
-            RESET = "\033[0m"
-            while tb:
+            while tb: # NOT WORKING FOR NOW
                 fcode = tb.tb_frame.f_code
                 print(f'{RED}{fcode.co_filename}, line {tb.tb_lineno}, in {fcode.co_name}{RESET}')
                 tb = tb.tb_next
-        
-        verbose and print()
-    
-    verbose and print(f'Batch completed with {errors} errors')
+
+    # determine output number (expected to be constant across func calls)
+    n_outs = None
+    outputs = [None] * n_sessions
+    for result in results:
+        if result is not None:
+            if isinstance(result,tuple):
+                n_outs = len(result)
+                outputs = [outputs.copy() for _ in range(n_outs)]
+            else:
+                n_outs = 0  # 0 marks the single output case
+            break
+    # assign outputs
+    if n_outs is not None:
+        for i in range(n_sessions):
+            if n_outs == 0:
+                outputs[i] = results[i]
+            else:
+                for j in range(n_outs):
+                    outputs[j][i] = results[i][j]
+
+    verbose and print(f'Batch completed with {len(errors)} errors')
     
     return tuple(outputs) if n_outs else outputs
