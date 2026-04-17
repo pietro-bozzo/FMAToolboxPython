@@ -10,7 +10,8 @@ def consolidateIntervals(intervals,epsilon=0,duration=0):
     # arguments:
     #     intervals    (:,2) float, rows are [start, stop] times for an interval (s); if 1d, reshaped to (1,2)
     #     epsilon      float = 0, intervals with bounds closer than epsilon are also consolidated
-    #     duration     float = 0, trim consolidated set of intervals so that it has given total duration
+    #     duration     float = 0, trim consolidated set of intervals so that it has given total duration,
+    #                  if negative, duration is counted from the end and intervals are trimmed rightwards
     #
     # output:
     #     intervals    (:,2) float, consolidated intervals (s)
@@ -58,12 +59,18 @@ def consolidateIntervals(intervals,epsilon=0,duration=0):
     if epsilon:
         intervals = intervals + np.array([1,-1])*epsilon
 
-    if duration:
+    if duration > 0:
         cum_duration = np.cumsum(np.diff(intervals))
         if cum_duration[-1] > duration:
             idx = np.searchsorted(cum_duration,duration) + 1 # first interval where cumulative exceeds duration
             intervals = intervals[:idx]
             intervals[-1,1] -= cum_duration[idx-1] - duration
+    elif duration < 0:
+        cum_duration = np.cumsum(np.diff(intervals[::-1])) # backwards cumulative duration
+        if cum_duration[-1] > -duration:
+            idx = np.searchsorted(cum_duration,-duration) + 1
+            intervals = intervals[-idx:]
+            intervals[0,0] += cum_duration[idx-1] + duration
 
     return intervals
 
@@ -229,7 +236,7 @@ def shuffleEvents(events,offset=0,intervals=None):
         # compute and shuffle inter-event intervals
         inter_event_intervals = np.diff(events,prepend=offset,axis=0)
         inter_event_intervals = np.random.permutation(inter_event_intervals)
-        shuffled = offset + np.cumsum(inter_event_intervals,axis=0) # CHECK if shuffled is 1d !!!
+        shuffled = offset + np.cumsum(inter_event_intervals,axis=0)
 
     # 2: multiple columns (also grouping ids)
     else:
