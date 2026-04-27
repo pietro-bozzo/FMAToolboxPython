@@ -237,7 +237,7 @@ def _batchWorker(payload):
 
 
 def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:list[dict]=None, ignore_args:bool=False,
-             sessions:list[int]=None, parallel:bool=False, verbose:bool=True) -> tuple[list, ...]:
+             sessions:list[int]=None, parallel:bool|int=False, verbose:bool=True) -> tuple[list, ...]:
     # run a routine on multiple sessions
     #
     # arguments:
@@ -247,7 +247,7 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:li
     #     kwargs         list of dict = [{}], keyword arguments for 'func', a dict per session or one for all
     #     ignore_args    bool = False, if True, ignore extra arguments from batch file
     #     sessions       (:) int = None, indices of session to process (default is all sessions from batch file)
-    #     parallel       bool = False, parallelize calls of `func` with concurrent.futures
+    #     parallel       bool | int = False, parallelize calls of `func` with concurrent.futures
     #     verbose:       bool = True, log progress
     #        
     # output:
@@ -305,7 +305,9 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:li
     else:
         # pack arguments into payloads
         payloads = [(i,func,s,args[i],extra_args[i],kwargs[i]) for i, s in enumerate(sessions_list)]
-        with concurrent.futures.ProcessPoolExecutor() as ex:
+        if parallel is True:
+            parallel = None # to keep default max_workers
+        with concurrent.futures.ProcessPoolExecutor(max_workers=parallel) as ex:
             for i, result in ex.map(_batchWorker, payloads):
                 if i >= 0:
                     results[i] = result
