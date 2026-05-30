@@ -342,6 +342,6 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:li
                 for j in range(n_outs):
                     outputs[j][i] = results[i][j]
 
-    verbose and print(f'Batch completed with {len(errors)} errors')
+    verbose and print(f'Batch completed with {len(errors)} errors, {datetime.datetime.now()}')
     
     return tuple(outputs) if n_outs else outputs
