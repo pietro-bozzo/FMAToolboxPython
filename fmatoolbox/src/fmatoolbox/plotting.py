@@ -320,24 +320,27 @@ def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axe
 
 
 def pHorzLine(p,t=None,dy=None,color=None,ax=None):
-    # p: (n_cond, n times)
+    # p: (n_times, n_cond)
 
-    t = np.array(t)
-    p = np.array(p,ndmin=2).astype(float)
+    p = np.asarray(p).astype(float)
+    if p.ndim == 1:
+        p = p.reshape(-1,1)
     if t is None:
-        t = range(p.shape[1])
+        t = range(p.shape[0])
+    else:
+        t = np.array(t)
     if ax is None:
         ax = plt.gca()
     y_lim = ax.get_ylim()
     y = y_lim[1]
     if dy is None:
         dy = np.diff(y_lim)[0] / 20
-    if color is None:
-        color = [None] * p.shape[0]
+    if color is None or isinstance(color,str):
+        color = [color] * p.shape[1]
 
     dt = (t[1] - t[0]) / 2
     t = np.stack((t-dt,t+dt)).ravel('F')
-    for i, this_p in enumerate(p):
+    for i, this_p in enumerate(p.T):
         if this_p.any():
             this_p[this_p==0] = np.nan
             this_p = np.stack((this_p,this_p))
