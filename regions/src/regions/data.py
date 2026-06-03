@@ -51,7 +51,7 @@ class Regions:
         self.states = {}
         for name in states:
             if name not in loaded_events:
-                raise(ValueError(f'Unable to load {self.basename}.{name}'))
+                raise ValueError(f'Unable to load {self.basename}.{name}')
             self.states[name] = loaded_events[name]
         # if session phases are available, use them to compute special states 'all' and 'other'
         if phase_names:
