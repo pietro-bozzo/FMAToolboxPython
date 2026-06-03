@@ -79,11 +79,14 @@ def loadEventFile(filename: str, compact: bool = False):
         lines = f.read().splitlines()
 
     # extract first non-whitespace token
-    times = [re.sub(r'([^ \t]*).*',r'\1',line,count=1) for line in lines]
+    times = [line.split()[0] for line in lines]
     times = np.array([float(t) / 1000.0 for t in times]) # convert to seconds
 
     # remove first token and following whitespace
-    descriptions = [re.sub(r'[^ \t]*[ \t]*', '', line, count=1) for line in lines]
+    descriptions = []
+    for line in lines:
+        parts = line.split(maxsplit=1)
+        descriptions.append(parts[1] if len(parts) > 1 else '')
 
     if compact:
         # group by events, description is of type 'beginning of basename_event1' or 'beginning of basename_event1_1'
