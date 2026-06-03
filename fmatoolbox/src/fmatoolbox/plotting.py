@@ -184,6 +184,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     #     ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     
     y = np.array(y)
+    y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
 
     # default values
     if lprop is None: lprop = {}
@@ -202,7 +203,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
         ax = plt.gca()
 
     # statistic value for each column
-    y_line = y.mean(axis=0)
+    y_line = np.nanmean(y,axis=0)
     # statistic confidence interval for each column
     y_low, y_high = ci(y)
 
