@@ -34,7 +34,10 @@ def loadSpikeTimes(session: str, output: str = 'dict', return_elec: bool = False
         raise(ValueError('\'output\' must be \'dict\', \'compact\' or \'full\''))
 
     file_root = pathlib.Path(session).with_suffix('')
-    data = scipy.io.loadmat(file_root.with_suffix('.cell_metrics.cellinfo.mat'),simplify_cells=True)['cell_metrics']
+    cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
+    if not cell_metrics_file.exists():
+        raise FileNotFoundError(f'{cell_metrics_file} not found')
+    data = scipy.io.loadmat(cell_metrics_file,simplify_cells=True)['cell_metrics']
     unit_id = data['UID'] - 1
     electrode_id = data['electrodeGroup'] # starts at 1
     # starts from 0 CHECK WITH CLUSTER LOC, there's also maxWaveformChannelOrder, there's also Putative cell type!!
