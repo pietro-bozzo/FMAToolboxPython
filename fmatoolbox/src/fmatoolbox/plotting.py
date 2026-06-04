@@ -150,12 +150,12 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
         data = sp.ndimage.zoom(data,(yzoom,xzoom))
 
     if x is None:
-        x = [0,n_x]
+        x = [0,n_x-1]
         dx = 0.5
     else:
         dx = (x[-1] - x[0]) / (data.shape[1] - 1) / 2 # here use post-zoom shape
     if y is None:
-        y = [0,n_y]
+        y = [0,n_y-1]
         dy = 0.5
     else:
         dy = (y[-1] - y[0]) / (data.shape[0] - 1) / 2
