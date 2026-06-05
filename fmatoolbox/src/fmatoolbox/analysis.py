@@ -69,26 +69,33 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     return np.concatenate((time_bins,firing_rate),1)
 
 
-def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,fast=False):
+def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,step=1,fast=False):
     # compute peri-event time histogram of a signal relative to synchronizing events
     #
     # arguments:
-    #     samples    (:,:) float, every row is either [time stamps] (s) or [time stamps, value]
+    #     samples    float, either:
+    #                 - (n) array of time stamps (s), describing a point process
+    #                 - (n,2) array, where each row is [time stamp (s), value], describing a continous signal
     #     events     (:) float, synchronizing events' times, CHECK WHAT HAPPENS FOR NON SORTED WITH 2 COLS SAMPLES
-    #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for vector samples)
+    #     groups     (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
     #     g_range    (2) int = [0,max(groups)], min and max group id
-    #     limit      (2) float = [-0.5,0.5] (s), defines window around events to compute PETH
+    #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for )
+    #     limit      (2) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
     #     n_bins     float = 101, number of time bins around event times
-    #     fast       bool = False, if True, samples are expected to be time sorted (to save time)
+    #     step       int = 1, only for point-process 'samples', for values higher than 1, time bins inside a window will overlap, yielding:
+    #                 - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
+    #                 - time resolution of bin_size / step
+    #     fast       bool = False, if True, samples are expected to be time sorted (to save computation time)
     #
     # output:
     #     mat        (n,n_bins) float, every row is samples centered on an event
     #     t          (1,n_bins) float, times (s)
     #     m          (n,1) float, average samples across events
 
+    # default values
     samples = np.array(samples,ndmin=1)
     events = np.asarray(events)
-    squeeze = True
+    squeeze = True # squeeze 'mat' to 2d when 'groups' is None
     if groups is None:
         groups = np.zeros(samples.shape[0],dtype=int)
         n_groups = 1
@@ -106,7 +113,9 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,fa
     
     # sort by time
     if not fast:
-        samples = np.sort(samples) if samples.ndim == 1 else samples[samples[:,0].argsort()]
+        sort_idx = np.argsort(samples) if samples.ndim == 1 else np.argsort(samples[:,0])
+        samples = samples[sort_idx]
+        groups = groups[sort_idx]
     
     # 1: point process
     if samples.ndim == 1 or samples.shape[1] == 1:
@@ -114,40 +123,32 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,fa
         # build time bins
         t = np.linspace(limits[0],limits[1],n_bins+1)
         t = (t[:-1] + t[1:]) / 2
-        bin_width = np.diff(limits) / n_bins
+        t = np.linspace(t[0],t[-1],(n_bins-1)*step+1)
+        bin_width = (limits[1] - limits[0]) / n_bins
+        mat = np.zeros((len(events), n_bins*step, n_groups), dtype=int)
 
-        mat = np.zeros((len(events), n_bins, n_groups), dtype=int)
-        # find where events fall in samples
-        left = np.searchsorted(samples, events + limits[0], side='left')
-        right = np.searchsorted(samples, events + limits[1], side='right')
-        counts = right - left
-        valid = counts > 0
-        # repeat event indices according to how many samples they match
-        event_idx = np.repeat(np.arange(len(events))[valid],counts[valid])
-        sample_idx = np.concatenate([np.arange(l,r) for l, r in zip(left[valid],right[valid])])
+        for i in range(step):
+            stride = i * bin_width / step
 
-        e_rep = events[event_idx]
-        s_sel = samples[sample_idx]
-        g_sel = groups[sample_idx]
+            # find where events fall in samples
+            left = np.searchsorted(samples, events+limits[0]+stride, side='left')
+            right = np.searchsorted(samples, events+limits[1]+stride, side='right')
+            counts = right - left
+            valid = counts > 0
+            # repeat event indices according to how many samples they match
+            event_idx = np.repeat(np.arange(len(events))[valid],counts[valid])
+            sample_idx = np.concatenate([np.arange(l,r) for l, r in zip(left[valid],right[valid])])
+            # build lists of matches
+            e_rep = events[event_idx]
+            s_sel = samples[sample_idx]
+            g_sel = groups[sample_idx]
+            # assign matches to 'mat'
+            bin_ind = ((s_sel-e_rep-limits[0]-stride) / bin_width).astype(int)
+            bin_ind = np.clip(bin_ind, 0, n_bins - 1) # avoid numerical error
+            np.add.at(mat, (event_idx, bin_ind*step+i, g_sel), 1)
 
-        bin_ind = ((s_sel - e_rep - limits[0]) / bin_width).astype(int)
-        bin_ind = np.clip(bin_ind, 0, n_bins - 1)
-
-        np.add.at(mat, (event_idx, bin_ind, g_sel), 1)
-
-        # find where events fall in samples OLD
-        # left = np.searchsorted(samples,events+limits[0],side='left')
-        # right = np.searchsorted(samples,events+limits[1],side='right')
-        # valid = right - left > 0
-        # mat = np.zeros((len(events),n_bins,n_groups),dtype=int)
-        # for i, e in enumerate(events):
-        #     if valid[i]:
-        #         distance = samples[left[i]:right[i]] - e
-        #         bin_ind = ((distance-limits[0])/bin_width).astype(int) # USE clip
-        #         bin_ind[bin_ind < 0] = 0
-        #         bin_ind[bin_ind >= n_bins] = n_bins - 1
-        #         np.add.at(mat,(i,bin_ind,groups[left[i]:right[i]]),1)
-
+        # restore correct 'mat' shape
+        mat = mat[:,:(n_bins-1)*step+1,:] # if step != 1, discard last bins which go outisde limits
         if squeeze:
             mat = mat.reshape((mat.shape[:2]))
 
