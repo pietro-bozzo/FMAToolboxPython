@@ -79,30 +79,11 @@ class Regions:
 
         # 4. load spikes and store them per region
         if load_spikes:
-        
-            spikes, electrodes = fmatoolbox.data.loadSpikeTimes(session,return_elec=True)
-            anat = regions.loaders.loadAnatomyFile()
-            anat = anat[anat['rat'] == int(self.basename[3:6])]
-
+            self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=regions.loaders.regionDataPath()/'nonlateral.anat')
             if ids:
-                anat = anat[np.isin(anat['region'],ids)]
+                self.region = {r: self.region[r] for r in ids}
             else:
-                self.ids = ids = np.unique(anat['region'])
-                self.region = {id : {} for id in ids}
-
-            units = np.fromiter(spikes.keys(),int)
-            for id in ids:
-                self.region[id]['units'] = []
-                s = []
-                for electrode in anat[anat['region']==id]['electrode']:
-                    electrode_units = units[electrodes==electrode]
-                    self.region[id]['units'].append(electrode_units)
-                    for unit in electrode_units:
-                        s.append(np.array([spikes[unit],[unit]*spikes[unit].size]).T)
-                # assing spikes, sorted by time
-                s = np.concatenate(s)
-                self.region[id]['spikes'] = s[s[:,0].argsort()]
-                self.region[id]['units'] = np.concatenate(self.region[id]['units'])
+                self.ids = np.array(list(self.region.keys()),dtype=str)
 
         return
     
