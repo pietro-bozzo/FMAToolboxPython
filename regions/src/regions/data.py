@@ -227,11 +227,8 @@ class Regions:
 
         regs, state = self._checkIDs(regs,state,fuse=True)
 
-        spikes = []
-        for r in regs:
-            spikes.append(self.region[r]['spikes'])
-        spikes = np.concatenate(spikes)
-        spikes = spikes[spikes[:,0].argsort()]
+        spikes = np.concatenate([self.region[r]['spikes'] for r in regs])
+        spikes = spikes[spikes[:,0].argsort()] # sort by time
 
         if np.any(state != 'all'):
             spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals([state]),shift=shift)
