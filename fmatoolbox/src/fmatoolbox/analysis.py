@@ -94,7 +94,7 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,st
 
     # default values
     samples = np.array(samples,ndmin=1)
-    events = np.asarray(events)
+    events = np.array(events,ndmin=1)
     squeeze = True # squeeze 'mat' to 2d when 'groups' is None
     if groups is None:
         groups = np.zeros(samples.shape[0],dtype=int)
