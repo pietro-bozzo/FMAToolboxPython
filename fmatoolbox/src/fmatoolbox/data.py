@@ -285,7 +285,7 @@ def _batchWorker(payload):
         return -i-1, e
 
 
-def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:list[dict]=None, ignore_args:bool=False,
+def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:bool|str=False, kwargs:dict|list[dict]=None, ignore_args:bool=False,
              sessions:list[int]=None, parallel:bool|int=False, verbose:bool=True) -> tuple[list, ...]:
     # run a routine on multiple sessions
     #
@@ -293,6 +293,7 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:li
     #     batch_file     string, path to batch file
     #     func           function to call for each session, must take session path as first arg
     #     args           list of list = [[]], positional arguments for 'func', one per session or a single list for all
+    #     rnd_seed       str = None, if given, spawn numpy random seeds, passed to 'func' as keyword argument
     #     kwargs         list of dict = [{}], keyword arguments for 'func', a dict per session or one for all
     #     ignore_args    bool = False, if True, ignore extra arguments from batch file
     #     sessions       (:) int = None, indices of session to process (default is all sessions from batch file)
@@ -318,6 +319,12 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:li
         args = args * n_sessions
     elif len(args) != n_sessions:
         raise ValueError("Argument 'args' must contain one list per session")
+    if rnd_seed:
+        seed_gen = np.random.SeedSequence()
+        seeds = seed_gen.spawn(n_sessions)
+        seeds = [[s] for s in seeds]
+    else:
+        seeds = [[]] * n_sessions
     if kwargs is None:
         kwargs = [{}]
     elif isinstance(kwargs,dict):
@@ -338,7 +345,7 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:li
         for i, session in enumerate(sessions_list):
             verbose and print(f'Batch progress: {session}, {i+1} out of {n_sessions}')
             try:
-                results[i] = func(session,*args[i],*extra_args[i],**kwargs[i])
+                results[i] = func(session,*args[i],*seeds[i],*extra_args[i],**kwargs[i])
             except Exception as e:
                 # log error to console
                 errors[-i-1] = e
