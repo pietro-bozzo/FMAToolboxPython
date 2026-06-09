@@ -3,6 +3,7 @@
 import numpy as np
 from numpy.ma.core import squeeze
 from scipy.ndimage import gaussian_filter
+import scipy.interpolate as spi
 import statsmodels.stats.multitest
 from typing import Callable
 
@@ -75,8 +76,8 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,st
     # arguments:
     #     samples    float, either:
     #                 - (n) array of time stamps (s), describing a point process
-    #                 - (n,2) array, where each row is [time stamp (s), value], describing a continous signal
-    #     events     (:) float, synchronizing events' times, CHECK WHAT HAPPENS FOR NON SORTED WITH 2 COLS SAMPLES
+    #                 - (n,:) array, where each row is [time stamp (s), value1, ...], describing one or more continous signals
+    #     events     (m) float, synchronizing events' times, their order is maintained in the output 'mat'
     #     groups     (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
     #     g_range    (2) int = [0,max(groups)], min and max group id
     #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for )
@@ -88,37 +89,42 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,st
     #     fast       bool = False, if True, samples are expected to be time sorted (to save computation time)
     #
     # output:
-    #     mat        (n,n_bins) float, every row is samples centered on an event
-    #     t          (1,n_bins) float, times (s)
-    #     m          (n,1) float, average samples across events
+    #     mat        (m,n_bins) float, every row corresponds to samples centered on an event
+    #     t          (n_bins) float, times (s)
+    #     m          (n_bins) float, average samples across events
 
     # default values
     samples = np.array(samples,ndmin=1)
+    point_process = samples.ndim == 1 or samples.shape[1] == 1
     events = np.array(events,ndmin=1)
-    squeeze = True # squeeze 'mat' to 2d when 'groups' is None
-    if groups is None:
-        groups = np.zeros(samples.shape[0],dtype=int)
-        n_groups = 1
-        g_range = None
+    if point_process:
+        if groups is None:
+            groups = np.zeros(samples.shape[0],dtype=int)
+            n_groups = 1
+            g_range = None
+            squeeze = True  # squeeze 'mat' to 2d when 'groups' is None
+        else:
+            groups = np.array(groups,ndmin=1,dtype=int)
+            if samples.shape[0] != groups.shape[0]:
+                raise ValueError("'samples' and 'groups' must have the same length")
+            n_groups = groups.max() + 1
+            squeeze = False
+        if g_range is not None:
+            groups = groups[(groups >= g_range[0]) & (groups <= g_range[1])]
+            groups -= int(g_range[0])
+            n_groups -= int(g_range[0])
     else:
-        groups = np.array(groups,ndmin=1,dtype=int)
-        if samples.shape[0] != groups.shape[0]:
-            raise ValueError("samples and groups must have the same length")
-        n_groups = groups.max() + 1
-        squeeze = False
-    if g_range is not None:
-        groups = groups[(groups >= g_range[0]) & (groups <= g_range[1])]
-        groups -= int(g_range[0])
-        n_groups -= int(g_range[0])
+        squeeze = samples.shape[1] < 3 # squeeze 'mat' to 2d when 'samples' has only one signal column
     
     # sort by time
     if not fast:
         sort_idx = np.argsort(samples) if samples.ndim == 1 else np.argsort(samples[:,0])
         samples = samples[sort_idx]
-        groups = groups[sort_idx]
+        if point_process:
+            groups = groups[sort_idx]
     
     # 1: point process
-    if samples.ndim == 1 or samples.shape[1] == 1:
+    if point_process:
 
         # build time bins
         t = np.linspace(limits[0],limits[1],n_bins+1)
@@ -147,10 +153,8 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,st
             bin_ind = np.clip(bin_ind, 0, n_bins - 1) # avoid numerical error
             np.add.at(mat, (event_idx, bin_ind*step+i, g_sel), 1)
 
-        # restore correct 'mat' shape
-        mat = mat[:,:(n_bins-1)*step+1,:] # if step != 1, discard last bins which go outisde limits
-        if squeeze:
-            mat = mat.reshape((mat.shape[:2]))
+        # if step != 1, discard last bins which go outisde limits
+        mat = mat[:,:(n_bins-1)*step+1,:]
 
     # 2: time series
     else:
@@ -158,7 +162,11 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,st
         t = np.linspace(limits[0],limits[1],n_bins)
         # interpolate PETH matrix
         t_mat = events.reshape((-1,1)) + t.reshape((1,-1)) # interpolation times around events
-        mat = np.interp(t_mat,samples[:,0],samples[:,1])
+        mat = np.stack( [np.interp(t_mat,samples[:,0],samples[:,i]) for i in range(1,samples.shape[1])], axis=-1)
+
+    # restore correct 'mat' shape
+    if squeeze:
+        mat = mat.reshape(mat.shape[:2])
 
     m = np.mean(mat,axis=0)
 
