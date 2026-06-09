@@ -1,4 +1,5 @@
 import pathlib
+import fmatoolbox.analysis
 import fmatoolbox.data
 import numpy as np
 import regions.computation
@@ -340,6 +341,6 @@ class Regions:
         intervals = {}
         size_t = {}
         for i, r in enumerate(regs):
-            size[r], intervals[r], size_t[r] = regions.computation.avalanchesFromProfile(fr[:,i+1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
+            size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,i+1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
 
         return size, intervals, size_t

@@ -1,6 +1,6 @@
 import numpy as np
 
-
+# DEPRECATED
 def avalanchesFromProfile(x,threshold,time_step,t0=0):
     # compute avalanches' sizes and [start,stop] intervals from a time series
     #
