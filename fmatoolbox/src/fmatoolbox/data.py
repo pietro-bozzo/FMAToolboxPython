@@ -277,15 +277,15 @@ def readBatchFile(file_path: str):
 
 def _batchWorker(payload):
     # private function to unpack payload and dispatch it to `func` inside runBatc
-    i, func, session, args, extra_args, kwargs = payload
+    i, func, session, args, extra_args, kwargs, seed = payload
     try:
-        result = func(session,*args,*extra_args,**kwargs)
+        result = func(session,*args,*extra_args,**kwargs,**seed)
         return i, result
     except Exception as e:
         return -i-1, e
 
 
-def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:bool|str=False, kwargs:dict|list[dict]=None, ignore_args:bool=False,
+def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:str=None, kwargs:dict|list[dict]=None, ignore_args:bool=False,
              sessions:list[int]=None, parallel:bool|int=False, verbose:bool=True) -> tuple[list, ...]:
     # run a routine on multiple sessions
     #
@@ -319,12 +319,12 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:
         args = args * n_sessions
     elif len(args) != n_sessions:
         raise ValueError("Argument 'args' must contain one list per session")
-    if rnd_seed:
+    if rnd_seed is not None:
         seed_gen = np.random.SeedSequence()
         seeds = seed_gen.spawn(n_sessions)
-        seeds = [[s] for s in seeds]
+        seeds = [{rnd_seed: s} for s in seeds]
     else:
-        seeds = [[]] * n_sessions
+        seeds = [{}] * n_sessions
     if kwargs is None:
         kwargs = [{}]
     elif isinstance(kwargs,dict):
@@ -345,7 +345,7 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:
         for i, session in enumerate(sessions_list):
             verbose and print(f'Batch progress: {session}, {i+1} out of {n_sessions}')
             try:
-                results[i] = func(session,*args[i],*seeds[i],*extra_args[i],**kwargs[i])
+                results[i] = func(session,*args[i],*extra_args[i],**kwargs[i],**seeds[i])
             except Exception as e:
                 # log error to console
                 errors[-i-1] = e
@@ -360,7 +360,7 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:
     # 2. Parallel Batch
     else:
         # pack arguments into payloads
-        payloads = [(i,func,s,args[i],extra_args[i],kwargs[i]) for i, s in enumerate(sessions_list)]
+        payloads = [(i,func,s,args[i],extra_args[i],kwargs[i],seeds[i]) for i, s in enumerate(sessions_list)]
         if parallel is True:
             parallel = None # to keep default max_workers
         with concurrent.futures.ProcessPoolExecutor(max_workers=parallel) as ex:
