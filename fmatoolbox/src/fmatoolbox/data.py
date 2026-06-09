@@ -385,11 +385,12 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, kwargs:li
     # assign outputs
     if n_outs is not None:
         for i in range(n_sessions):
-            if n_outs == 0:
-                outputs[i] = results[i]
-            else:
-                for j in range(n_outs):
-                    outputs[j][i] = results[i][j]
+            if results[i] is not None:
+                if n_outs == 0:
+                    outputs[i] = results[i]
+                else:
+                    for j in range(n_outs):
+                        outputs[j][i] = results[i][j]
 
     verbose and print(f'Batch completed with {len(errors)} errors, {datetime.datetime.now()}')
     
