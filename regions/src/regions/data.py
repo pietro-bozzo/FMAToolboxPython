@@ -1,4 +1,4 @@
-from pathlib import Path
+import pathlib
 import fmatoolbox.data
 import numpy as np
 import regions.computation
@@ -19,8 +19,8 @@ class Regions:
         #     events         (:) string = None, additional events to load (they correspond to extensions of files to load)
         #     load_spikes    bool = True, load spikes (False allows to access events without costly spike loading)
 
-        self.session = Path(session).parent
-        self.basename = Path(session).name
+        self.session = pathlib.Path(session).parent
+        self.basename = pathlib.Path(session).name
 
         # 1. load events
         self.all_events = phases is None

@@ -99,7 +99,7 @@ def loadSpikeTimes(session:str, output:str='dict', anat_file:str=None, return_el
                 spikes[id]['units'] = np.concatenate(spikes[id]['units'])
             # save
             if not spike_file.parent.exists():
-                Path.mkdir(spike_file.parent)
+                pathlib.Path.mkdir(spike_file.parent)
             np.savez(spike_file,**{f'sp_{r}': s['spikes'] for r, s in spikes.items()},**{f'un_{r}': s['units'] for r, s in spikes.items()})
 
     if not return_elec and not return_loc:
