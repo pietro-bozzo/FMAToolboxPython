@@ -348,3 +348,54 @@ def pHorzLine(p,t=None,dy=None,color=None,ax=None):
             y = y + dy
 
     return
+
+
+def plotIntervals(intervals,alpha=0.3,color='gray',ax=None):
+
+    intervals = np.array(intervals,ndmin=2)
+    if intervals.ndim != 2 or intervals.shape[1] != 2:
+        raise ValueError("'intervals' must have shape (n,2)")
+
+    if ax is None:
+        ax = plt.gca()
+
+    for start, stop in intervals:
+        ax.axvspan(start,stop,alpha=alpha,color=color)
+
+
+def plotPDF(x,log=False,bandwidth='scott',eps=1e-12,n_points=50,color=None,label=None,ax=None,**plot_kwargs):
+
+    if ax is None:
+        ax = plt.gca()
+    if isinstance(x,tuple):
+        if color is None:
+            color = [None] * len(x)
+        if label is None:
+            label = [None] * len(x)
+    else:
+        x = (x,)
+        color = [color]
+        label = [label]
+
+    for i, data in enumerate(x):
+        # cast to array
+        data = np.asarray(data)
+        if data.ndim == 2 and data.shape[1] == 1:
+            data = data.ravel()
+
+        if log:
+            data = np.log(data + eps) # log-transform data
+            grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
+            jacobian = np.exp(grid) # jacobian term to transform density back to linear
+        else:
+            grid = np.linspace(data.min(),data.max(),n_points) # linear grid
+
+        kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
+        if log:
+            density = kde(grid) / jacobian
+            ax.loglog(jacobian,density,color=color[i],label=label[i],**plot_kwargs)
+        else:
+            density = kde(grid)
+            ax.plot(grid,density,color=color[i],label=label[i],**plot_kwargs)
+
+    return grid, density
