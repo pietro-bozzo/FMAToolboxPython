@@ -215,12 +215,13 @@ class Regions:
         return np.concatenate(units)
 
 
-    def spikes(self,regs=None,state=None,shift=False):
+    def spikes(self,regs=None,state=None,when=None,shift=False):
         # get pooled spikes for regions
         #
         # arguments:
         #     regs      (:) string, spikes of all these regions are returned as a time-sorted array
         #     state     string = None, behavioral to restrict spikes to
+        #     when      DESCRIBE, same input as eventIntervals
         #     shift     bool = False, shift epochs together in time after filtering by state
         #
         # output:
@@ -233,18 +234,21 @@ class Regions:
 
         if np.any(state != 'all'):
             spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals([state]),shift=shift)
+        if when is not None:
+            spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals(when),shift=shift)
 
         return spikes
     
 
     ## functions to compute quantities ##
 
-    def firingRate(self,regs=None,states=None,shift=False,window=0.05,step=1,smooth=None,norm=False):
+    def firingRate(self,regs=None,states=None,when=None,shift=False,window=0.05,step=1,smooth=None,norm=False):
         # get region firing rate
         #
         # arguments:
         #     regs      (n) string = None, brain regions, default is all loaded regions
         #     states    (:) string = None, behavioral states, default is all
+        #     when      DESCRIBE, same input as eventIntervals
         #     shift     bool = False, shift epochs together in time after filtering by state
         #     window    float = 0.05, window size to count spikes
         #     step      int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
@@ -273,6 +277,8 @@ class Regions:
         # filter by state
         if np.any(states != 'all'):
             firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
+        if when is not None:
+            firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
 
         # normalize
         if norm:
@@ -281,12 +287,13 @@ class Regions:
         return firing_rate
     
 
-    def unitFiringRate(self,regs=None,states=None,shift=False,window=0.05,step=1,smooth=None):
+    def unitFiringRate(self,regs=None,states=None,when=None,shift=False,window=0.05,step=1,smooth=None):
         # get units' firing rate
         #
         # arguments:
         #     regs      (:) str = None, brain regions, default is all loaded regions
         #     states    (:) str = None, behavioral states, default is all
+        #     when      DESCRIBE, same input as eventIntervals
         #     shift     bool = False, shift epochs together in time after filtering by state
         #     window    float = 0.05 s, window size to count spikes
         #     step      int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
@@ -312,16 +319,19 @@ class Regions:
         # filter by state
         if np.any(states != 'all'):
             firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
+        if when is not None:
+            firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
 
         return firing_rate
     
 
-    def avalanches(self,regs=None,states=None,shift=False,thresh=30,window=0.05,step=1,smooth=None):
+    def avalanches(self,regs=None,states=None,when=None,shift=False,thresh=30,window=0.05,step=1,smooth=None):
         # compute avalanches per region from population firing rate
         #
         # arguments:
         #     regs      (:) str = None, brain regions, default is all loaded regions
         #     states    (:) str = None, behavioral states, default is all
+        #     when      DESCRIBE, same input as eventIntervals
         #     shift     bool = False, shift epochs together in time after filtering by state
         #     thresh    float = 30, percentile to use as threshold, must be in [0,100]
         #     window    float = 0.05 s, window size to count spikes
@@ -336,7 +346,7 @@ class Regions:
 
         regs, states = self._checkIDs(regs,states,fuse=True)
 
-        fr = self.firingRate(regs=regs,states=states,shift=shift,window=window,step=step,smopth=smooth)
+        fr = self.firingRate(regs=regs,states=states,when=when,shift=shift,window=window,step=step,smooth=smooth)
         size = {}
         intervals = {}
         size_t = {}
