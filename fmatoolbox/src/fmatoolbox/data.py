@@ -293,7 +293,7 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:
     #     batch_file     string, path to batch file
     #     func           function to call for each session, must take session path as first arg
     #     args           list of list = [[]], positional arguments for 'func', one per session or a single list for all
-    #     rnd_seed       str = None, if given, spawn numpy random seeds, passed to 'func' as keyword argument
+    #     rnd_seed       str = None, if given, spawn numpy random seeds, passed to 'func' as keyword argument, necessary to use np.random with 'parallel'
     #     kwargs         list of dict = [{}], keyword arguments for 'func', a dict per session or one for all
     #     ignore_args    bool = False, if True, ignore extra arguments from batch file
     #     sessions       (:) int = None, indices of session to process (default is all sessions from batch file)
