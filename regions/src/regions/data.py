@@ -1,7 +1,8 @@
 import pathlib
+import numpy as np
+import re
 import fmatoolbox.analysis
 import fmatoolbox.data
-import numpy as np
 import regions.computation
 import regions.loaders
 
@@ -140,15 +141,34 @@ class Regions:
         # get [start, stop] intervals (s) for a union and/or intersection of events
         #
         # arguments:
-        #     events       (n) list of (:) string, each element is a list of events, to compute intervals:
+        #     events       (n) list of (:) string, each element is a list of events; to compute intervals:
         #                    1. intervals corresponding to names from each list inside 'events' are united, yielding n interval sets
         #                    2. output is intersection between this n sets
-        #                  e. g., events = [['rem','sws'],['sleep1']]
+        #                  e.g., events = [['rem','sws'],['sleep1']]
         #                    1. 'rem' and 'sws' intervals are united (a), 'sleep1' is unchanged (b)
         #                    2. intersection between (a) and (b) is output
+        #                  note: event names are interpreted as regular expressions and searched with re.fullmatch;
+        #                    if a name ends in # followed by digits, they are interpreted as the index of the match to keep
+        #                  e.g., 'sleep.*' matches all sleep events, 'sleep.*2' matches the third sleep event (if present)
         #
         # output:
         #     intervals    (:,2) double, each row is a [start, stop] interval (s)
+
+        def match(events,patterns):
+            matches = []
+            for pattern in patterns:
+                m = re.fullmatch(r"(.*)#(\d+)",pattern) # look for #
+                if m:
+                    # take match indexed by 'idx': digit after # (or none)
+                    pat, idx = m.groups()
+                    idx = int(idx)
+                    match = [e for e in events if re.fullmatch(pat,e)]
+                    if 0 <= idx < len(match):
+                        matches.append(match[idx])
+                else:
+                    # usual regexp
+                    matches += [e for e in events if re.fullmatch(pattern,e)]
+            return matches
 
         # default output
         if events is None:
@@ -165,12 +185,12 @@ class Regions:
             intervals = []
             for ev in events:
                 # 1. union of all intervals in ev
-                ev = np.array(ev)
+                ev = np.asarray(ev)
                 if ev.ndim == 0:
                     raise ValueError("'events' must be like a list of lists of strings")
-                interv = [self.phases[e][:,:2] for e in ev if e in self.phases]
-                [interv.append(self.states[e][:,:2]) for e in ev if e in self.states]
-                [interv.append(self.events[e][:,:2]) for e in ev if e in self.events]
+                interv = [self.phases[e][:,:2] for e in match(self.phases,ev)]
+                [interv.append(self.states[e][:,:2]) for e in match(self.states,ev)]
+                [interv.append(self.events[e][:,:2]) for e in match(self.events,ev)]
                 if len(interv) == 0:
                     raise ValueError(f"None of the following was found: {ev}")
                 intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv)))
