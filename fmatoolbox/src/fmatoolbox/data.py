@@ -1,5 +1,5 @@
 ''' Session data handling functions for FMAToolbox '''
-
+from IPython.core.interactiveshell import is_integer_string
 from typing import Any, Callable
 import pathlib
 import scipy.io
@@ -413,6 +413,8 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:
     
     # parse batch file
     sessions_list, extra_args = readBatchFile(batch_file)
+    if not isinstance(sessions,collections.abc.Iterable):
+        sessions = [sessions]
     if sessions is not None:
         sessions_list = [sessions_list[i] for i in sessions]
         extra_args = [extra_args[i] for i in sessions]
