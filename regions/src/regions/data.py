@@ -351,7 +351,7 @@ class Regions:
 
         # normalize
         if norm:
-            firing_rate[:,1:] /= [len(self.units(r)) for r in regs]
+            firing_rate[:,1:] /= [len(self.units(r)) for r in regs if r is not None]+[len(self.units(g)) for g in e_groups if g is not None]
 
         return firing_rate
     
