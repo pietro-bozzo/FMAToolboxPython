@@ -84,6 +84,8 @@ def setProp(axs:Iterable[mpla.Axes], xlabelcolor:dict[int,mplt.ColorType]=None, 
     # promote single axis to sequence
     if isinstance(axs,mpla._axes.Axes):
         axs = [axs]
+    elif isinstance(axs,np.ndarray):
+        axs = axs.ravel()
 
     for ax in axs:
 
