@@ -24,6 +24,7 @@ class Regions:
 
         self.session = pathlib.Path(session).parent
         self.basename = pathlib.Path(session).name
+        self.rat = self.basename[3:6]
 
         # 1. load events
         self.all_events = phases is None
