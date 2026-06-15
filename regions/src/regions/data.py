@@ -10,7 +10,7 @@ import regions.loaders
 class Regions:
     # Handler for multi-region spiking data, stores session metadata and provides access to computed quantities
 
-    def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True):
+    def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False):
         # construct a Regions object
         #
         # arguments:
@@ -20,6 +20,7 @@ class Regions:
         #     states         (:) string = None, behavioral states to load (they correspond to extensions of files to load)
         #     events         (:) string = None, additional events to load (they correspond to extensions of files to load)
         #     load_spikes    bool = True, load spikes (False allows to access events without costly spike loading)
+        #     reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
 
         self.session = pathlib.Path(session).parent
         self.basename = pathlib.Path(session).name
@@ -81,7 +82,7 @@ class Regions:
 
         # 4. load spikes and store them per region
         if load_spikes:
-            self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=regions.loaders.regionDataPath()/'nonlateral.anat')
+            self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=regions.loaders.regionDataPath()/'nonlateral.anat',reload=reload)
             if ids:
                 self.region = {r: self.region[r] for r in ids}
             else:
@@ -217,22 +218,31 @@ class Regions:
         return info
     
 
-    def units(self,regs=None):
+    def units(self,regs=None,e_groups=None):
         # get pooled list of units for regions
         #
         # arguments:
-        #     regs     (:) string, units of all these regions are returned as an array
+        #     regs        (:) string, units of all these regions are returned as an array
+        #     e_groups    (:) int, units of all these electrode groups (starting at 1) are returned as an array
         #
         # output:
-        #     units    (:) int
+        #     units       (:) int, sorted by value
 
+        temp_flag = regs is None and e_groups is not None
         regs, _ = self._checkIDs(regs)
+        if temp_flag:
+            regs = [None]
+        if isinstance(e_groups,int):
+            e_groups = [e_groups]
 
         units = []
-        for r in regs:
-            units.append(self.region[r]['units'])
+        for r in self.ids:
+            if r in regs:
+                units.extend(list(self.region[r]['e_group'].values()))
+            elif e_groups is not None:
+                [units.append(u) for g, u in self.region[r]['e_group'].items() if g in e_groups]
 
-        return np.concatenate(units)
+        return np.sort(np.concatenate(units)) if len(units) else units
 
 
     def spikes(self,regs=None,state=None,when=None,shift=False):
