@@ -9,6 +9,7 @@ import matplotlib.typing as mplt
 import scipy.stats as spst
 import scipy as sp
 from collections.abc import Iterable
+from prompt_toolkit.contrib.regular_languages import validation
 from typing import Literal
 
 
@@ -108,6 +109,32 @@ def saveFigure(fig,fname,format):
         format = [format]
     for f in format:
         fig.savefig(str(fname)+'.'+f,transparent=True,bbox_inches='tight',pad_inches=0,format=f,dpi=200)
+
+    return
+
+
+def plotXY(data,start=None,stop=None,color=None,label=None,ax=None):
+    # plot columns of 'data', interpreting the first as the x axis and all others as y values
+
+    data = np.array(data, ndmin=2)
+    x = data[:,0]
+    if ax is None:
+        ax = plt.gca()
+
+    valid = np.full(x.shape,True)
+    if start is not None:
+        valid[x < start] = False
+    if stop is not None:
+        valid[x > stop] = False
+
+    n_lines = data.shape[1] - 1
+    if color is None or isinstance(color,str):
+        color = [color] * n_lines
+    if label is None or isinstance(label,str):
+        label = [label] * n_lines
+
+    for i in range(n_lines):
+        ax.plot(x[valid], data[valid,i+1], color=color[i], label=label[i])
 
     return
 
