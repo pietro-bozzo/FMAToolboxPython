@@ -413,9 +413,9 @@ def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:
     
     # parse batch file
     sessions_list, extra_args = readBatchFile(batch_file)
-    if not isinstance(sessions,collections.abc.Iterable):
-        sessions = [sessions]
     if sessions is not None:
+        if not isinstance(sessions, collections.abc.Iterable):
+            sessions = [sessions]
         sessions_list = [sessions_list[i] for i in sessions]
         extra_args = [extra_args[i] for i in sessions]
     n_sessions = len(sessions_list)
