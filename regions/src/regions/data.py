@@ -5,7 +5,7 @@ import fmatoolbox.analysis
 import fmatoolbox.data
 import regions.computation
 import regions.loaders
-
+from collections.abc import Iterable
 
 class Regions:
     # Handler for multi-region spiking data, stores session metadata and provides access to computed quantities
@@ -93,31 +93,56 @@ class Regions:
 
     ## validation functions ##
 
-    def _checkIDs(self,regs=None,states=None,fuse=False):
-        # validate that regions and states are loaded in self
+    def _checkIDs(self,regs=None,e_groups=None,states=None,exclusive=True,fuse=False):
+        # validate that regions, electrode groups, and states exist in Regions object
         #
         # arguments:
-        #     regs      (:) string = None, brain regions, default is all loaded regions
-        #     states    (:) string = None, behavioral states, default depends on fuse
-        #     fuse      bool = False, if True, default states is 'all', else it is all other states
+        #     regs         (:) string = None, brain regions, see 'exclusive' for default value
+        #     e_groups     (:) int = None, electrode groups, see 'exclusive' for default value
+        #     states       (:) string = None, behavioral states, see 'fuse' for default value
+        #     exclusive    bool = True, make default 'regs' (or 'e_groups') [None] when 'e_groups' (or 'regs') is provided,
+        #                  otherwise they are all regions and all electrode groups, respectively
+        #     fuse         bool = False, if True, default states is "all", else it is all other states
         #
         # output:
-        #     regs      (:) string, unique regs (preserving order)
-        #     states    (:) string, unique states (preserving order)
+        #     regs        (:) string, unique regs (preserving order)
+        #     e_groups    (:) int, unique electrode groups (preserving order)
+        #     states      (:) string, unique states (preserving order)
+
+        regs = np.asarray(regs)
+        e_groups = np.asarray(e_groups)
+        states = np.asarray(states)
 
         # default: all regions
-        if regs is None:
-            regs = self.ids
+        if np.all(regs == None):
+            if exclusive and np.any(e_groups != None):
+                regs = np.array([None])
+            else:
+                regs = self.ids
         else:
         # return unique regs
             regs = np.array(regs).flatten()
             if not np.isin(regs,self.ids).all():
-                raise(ValueError(f'Unrecognized region'))
+                raise ValueError('unrecognized region')
             _, idx = np.unique(regs,return_index=True)
             regs = regs[np.sort(idx)]
 
+        # default: all electrode groups
+        all_e_groups = np.concatenate([list(self.region[r]['e_group'].keys()) for r in self.ids])
+        if np.all(e_groups == None):
+            if exclusive and np.any(regs != None):
+                e_groups = np.array([None])
+            else:
+                e_groups = all_e_groups
+        else:
+            e_groups = np.array(e_groups).flatten()
+            if not np.isin(e_groups,all_e_groups).all():
+                raise ValueError('unrecognized electrode group')
+            _, idx = np.unique(e_groups,return_index=True)
+            e_groups = e_groups[np.sort(idx)]
+
         # default:
-        if states is None:
+        if np.all(states == None):
             # 'all' if fuse
             if fuse or len(self.states.keys()) == 2:
                 states = np.array(['all'])
@@ -129,11 +154,11 @@ class Regions:
         else:
             states = np.array(states).flatten()
             if not np.isin(states,list(self.states.keys())).all():
-                raise(ValueError(f'Unrecognized state'))
+                raise ValueError('unrecognized state')
             _, idx = np.unique(states,return_index=True)
             states = states[np.sort(idx)]
 
-        return regs, states
+        return regs, e_groups, states
     
 
     ## getters with minimal processing ##
@@ -222,44 +247,49 @@ class Regions:
         # get pooled list of units for regions
         #
         # arguments:
-        #     regs        (:) string, units of all these regions are returned as an array
-        #     e_groups    (:) int, units of all these electrode groups (starting at 1) are returned as an array
+        #     regs        (:) string = None, units of all these regions are returned as an array, default is all regions
+        #     e_groups    (:) int = None, units of all these electrode groups (starting at 1) are returned as an array
         #
         # output:
         #     units       (:) int, sorted by value
 
-        temp_flag = regs is None and e_groups is not None
-        regs, _ = self._checkIDs(regs)
-        if temp_flag:
-            regs = [None]
-        if isinstance(e_groups,int):
-            e_groups = [e_groups]
+        regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups)
 
         units = []
         for r in self.ids:
             if r in regs:
                 units.extend(list(self.region[r]['e_group'].values()))
-            elif e_groups is not None:
+            elif np.any(e_groups != [None]):
                 [units.append(u) for g, u in self.region[r]['e_group'].items() if g in e_groups]
 
         return np.sort(np.concatenate(units)) if len(units) else units
 
 
-    def spikes(self,regs=None,state=None,when=None,shift=False):
+    def spikes(self,regs=None,e_groups=None,state=None,when=None,shift=False):
         # get pooled spikes for regions
         #
         # arguments:
-        #     regs      (:) string, spikes of all these regions are returned as a time-sorted array
-        #     state     string = None, behavioral to restrict spikes to
-        #     when      DESCRIBE, same input as eventIntervals
-        #     shift     bool = False, shift epochs together in time after filtering by state
+        #     regs        (:) string = None, spikes of all these regions are returned as a time-sorted array
+        #     e_groups    (:) int = None, units of all these electrode groups (starting at 1) are returned as a time-sorted array
+        #     state       string = None, behavioral to restrict spikes to
+        #     when        DESCRIBE, same input as eventIntervals
+        #     shift       bool = False, shift epochs together in time after filtering by state
         #
         # output:
         #     spikes    (:) float, each row is [spike time (s), unit id]
 
-        regs, state = self._checkIDs(regs,state,fuse=True)
+        regs, e_groups, state = self._checkIDs(regs=regs,e_groups=e_groups,states=state,fuse=True)
 
-        spikes = np.concatenate([self.region[r]['spikes'] for r in regs])
+        spikes = []
+        e_group_units = self.units(e_groups=e_groups)
+        for r in self.ids:
+            if r in regs:
+                spikes.append(self.region[r]['spikes'])
+            elif np.any(e_groups != [None]):
+                s = self.region[r]['spikes']
+                spikes.append(s[np.isin(s[:,1],e_group_units),:])
+
+        spikes = np.concatenate(spikes)
         spikes = spikes[spikes[:,0].argsort()] # sort by time
 
         if np.any(state != 'all'):
@@ -272,34 +302,42 @@ class Regions:
 
     ## functions to compute quantities ##
 
-    def firingRate(self,regs=None,states=None,when=None,shift=False,window=0.05,step=1,smooth=None,norm=False):
+    def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, states:Iterable[str]=None, when=None, shift=False,
+                   window=0.05, step=1, smooth=None, norm=False):
         # get region firing rate
         #
         # arguments:
-        #     regs      (n) string = None, brain regions, default is all loaded regions
-        #     states    (:) string = None, behavioral states, default is all
-        #     when      DESCRIBE, same input as eventIntervals
-        #     shift     bool = False, shift epochs together in time after filtering by state
-        #     window    float = 0.05, window size to count spikes
-        #     step      int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
-        #               default is no overlap
-        #     smooth    float = None, gaussian kernel std for smoothing over time
-        #     norm      bool = False, normalize by neuron number per region
+        #     regs        (n) string = None, brain regions to compute firing rate of, default is all regions
+        #     e_groups    (m) int = None, electrode groups (starting at 1) to compute firing rate of, default is none
+        #     states      (:) string = None, behavioral states, default is all
+        #     when        DESCRIBE, same input as eventIntervals
+        #     shift       bool = False, shift epochs together in time after filtering by state
+        #     window      float = 0.05, window size to count spikes
+        #     step        int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+        #                 default is no overlap
+        #     smooth      float = None, gaussian kernel std for smoothing over time
+        #     norm        bool = False, normalize by neuron number per region
         #
         # output:
-        #     rate      (:,n+1) float, every row is [time stamp, firing rates for n regions]
+        #     rate        (:,n+m+1) float, every row is [time stamp, firing rates for n regions, firing rates for m electrodes],
+        #                 input order of regions and electrodes is preserved
 
-        regs, states = self._checkIDs(regs,states,fuse=True)
+        regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
-        # operate per session phase
+        # operate per session phase (if some are missing)
         phase_intervals = fmatoolbox.general.consolidateIntervals(self.eventIntervals(),epsilon=0.00001)
         firing_rate = []
         time = []
         for interval in phase_intervals:
             fr_interv = []
-            for r in regs:
-                fr = fmatoolbox.analysis.firingRate(self.spikes(r)[:,0],interval[0],interval[1],window,step,smooth)
-                fr_interv.append(fr[:,1])
+            if np.any(regs != None):
+                for r in regs:
+                    fr = fmatoolbox.analysis.firingRate(self.spikes(regs=r)[:,0],np.floor(interval[0]),interval[1],window,step,smooth)
+                    fr_interv.append(fr[:,1])
+            if np.any(e_groups != None):
+                for e in e_groups:
+                    fr = fmatoolbox.analysis.firingRate(self.spikes(e_groups=e)[:,0],np.floor(interval[0]),interval[1],window,step,smooth)
+                    fr_interv.append(fr[:,1])
             firing_rate.append(np.stack(fr_interv,1))
             time.append(fr[:,0])
         firing_rate = np.concatenate((np.concatenate(time).reshape((-1,1)),np.concatenate(firing_rate)),1)
@@ -333,7 +371,7 @@ class Regions:
         # output:
         #     rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
 
-        regs, states = self._checkIDs(regs,states,fuse=True)
+        regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
 
         # operate per session phase
         phase_intervals = fmatoolbox.general.consolidateIntervals(self.eventIntervals(),epsilon=0.00001)
@@ -374,7 +412,7 @@ class Regions:
         #     intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
         #     size_t       (m) float, size over time, in which every avalanche is separated by a 0
 
-        regs, states = self._checkIDs(regs,states,fuse=True)
+        regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
 
         fr = self.firingRate(regs=regs,states=states,when=when,shift=shift,window=window,step=step,smooth=smooth)
         size = {}
