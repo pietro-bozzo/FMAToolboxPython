@@ -109,7 +109,7 @@ def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, relo
     return spikes, electrode_id, cluster_loc
 
 
-def loadCluFiles(session:str, rate:float=20000, output:str='dict', anat_file:str=None):
+def loadCluFiles(session:str, rate:float=20000, output:str='dict', anat_file:str=None, reload:bool=False):
 
     if output not in ['dict','compact','full','regions']:
         raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
