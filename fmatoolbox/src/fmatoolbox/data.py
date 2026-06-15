@@ -39,7 +39,7 @@ def loadSpikeTimes(session:str, output:str='dict', anat_file:str=None, return_el
     else:
         if return_elec or return_loc:
             raise ValueError("'return_elec' and 'return_loc' are not implemented for .clu files")
-        spikes = loadCluFiles(session,output=output,anat_file=anat_file)
+        spikes = loadCluFiles(session,output=output,anat_file=anat_file,reload=reload)
 
     if not return_elec and not return_loc:
         return spikes
