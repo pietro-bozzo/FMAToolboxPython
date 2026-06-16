@@ -255,7 +255,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     return
 
 
-def boxPlot(data, x=None, color=None, ax:mpla.Axes=None):
+def boxPlot(data, x=None, color=None, label=None, ax:mpla.Axes=None):
 
     if ax is None:
         ax = plt.gca()
@@ -283,6 +283,10 @@ def boxPlot(data, x=None, color=None, ax:mpla.Axes=None):
 
     ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
                capprops={'linewidth':lw},flierprops=flierprops)
+    if label is not None:
+        if x is None:
+            x = np.arange(1,len(label)+1)
+        ax.set_xticks(x,label)
 
     return
 
