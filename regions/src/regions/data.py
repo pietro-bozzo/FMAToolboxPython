@@ -23,7 +23,7 @@ class Regions:
         #     reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
 
         self.session = pathlib.Path(session).parent
-        self.basename = pathlib.Path(session).name
+        self.basename = pathlib.Path(session).stem
         self.rat = self.basename[3:6]
 
         # 1. load events
@@ -36,6 +36,8 @@ class Regions:
             events = []
         elif isinstance(events,str):
             events = [events]
+        if isinstance(phases,str):
+            phases = [phases]
         loaded_events = fmatoolbox.data.loadEvents(session,extra=states+events)
         states = [s.rsplit('/',1)[-1] for s in states] # remove everything before '/' in every event
         events = [e.rsplit('/',1)[-1] for e in events]
@@ -43,11 +45,7 @@ class Regions:
         phase_names = [name for name in loaded_events.keys() if name not in states and name not in events]
 
         if phases:
-            indices = [phase_names.index(p) for p in phases if p in phase_names]
-            unknown = set(events) - set(phase_names)
-            if unknown:
-                print(f'Warning: missing events: {unknown}')
-            self.phases = {phase_names[i] : loaded_events[phase_names[i]] for i in indices}
+            self.phases = {m : loaded_events[m] for m in self._matchEvents(phase_names,phases)}
         else:
             self.phases = {name : loaded_events[name] for name in phase_names}
 
@@ -57,7 +55,7 @@ class Regions:
             if name not in loaded_events:
                 raise ValueError(f'Unable to load {self.basename}.{name}')
             self.states[name] = loaded_events[name]
-        # if session phases are available, use them to compute special states 'all' and 'other'
+        # if session phases are available, use them to compute special states 'all' and 'other' SHOULD ALSO RESTRICT states AND events TO phases
         if phase_names:
             self.states['all'] = np.array([[self.phases[list(self.phases)[0]][0,0],self.phases[list(self.phases)[-1]][-1,-1]]])
             self.states['other'] = self.states['all']
@@ -88,6 +86,10 @@ class Regions:
                 self.region = {r: self.region[r] for r in ids}
             else:
                 self.ids = np.array(list(self.region.keys()),dtype=str)
+            if not self.all_events:
+                # restrict spikes to session phases
+                for id in self.ids:
+                    self.region[id]['spikes'] = fmatoolbox.general.restrict(self.region[id]['spikes'],self.eventIntervals())
 
         return
     
@@ -160,7 +162,24 @@ class Regions:
             states = states[np.sort(idx)]
 
         return regs, e_groups, states
-    
+
+
+    def _matchEvents(self,events,patterns):
+
+        matches = []
+        for pattern in patterns:
+            m = re.fullmatch(r"(.*)#(\d+)",pattern) # look for #
+            if m:
+                # take match indexed by 'idx': digit after # (or none)
+                pat, idx = m.groups()
+                idx = int(idx)
+                match = [e for e in events if re.fullmatch(pat,e)]
+                if 0 <= idx < len(match):
+                    matches.append(match[idx])
+            else:
+                # usual regexp
+                matches += [e for e in events if re.fullmatch(pattern,e)]
+        return matches
 
     ## getters with minimal processing ##
 
@@ -181,22 +200,6 @@ class Regions:
         # output:
         #     intervals    (:,2) double, each row is a [start, stop] interval (s)
 
-        def match(events,patterns):
-            matches = []
-            for pattern in patterns:
-                m = re.fullmatch(r"(.*)#(\d+)",pattern) # look for #
-                if m:
-                    # take match indexed by 'idx': digit after # (or none)
-                    pat, idx = m.groups()
-                    idx = int(idx)
-                    match = [e for e in events if re.fullmatch(pat,e)]
-                    if 0 <= idx < len(match):
-                        matches.append(match[idx])
-                else:
-                    # usual regexp
-                    matches += [e for e in events if re.fullmatch(pattern,e)]
-            return matches
-
         # default output
         if events is None:
             intervals = np.concatenate(list(self.phases.values()))
@@ -215,9 +218,9 @@ class Regions:
                 ev = np.asarray(ev)
                 if ev.ndim == 0:
                     raise ValueError("'events' must be like a list of lists of strings")
-                interv = [self.phases[e][:,:2] for e in match(self.phases,ev)]
-                [interv.append(self.states[e][:,:2]) for e in match(self.states,ev)]
-                [interv.append(self.events[e][:,:2]) for e in match(self.events,ev)]
+                interv = [self.phases[e][:,:2] for e in self._matchEvents(self.phases,ev)]
+                [interv.append(self.states[e][:,:2]) for e in self._matchEvents(self.states,ev)]
+                [interv.append(self.events[e][:,:2]) for e in self._matchEvents(self.events,ev)]
                 if len(interv) == 0:
                     raise ValueError(f"None of the following was found: {ev}")
                 intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv)))
@@ -242,7 +245,21 @@ class Regions:
         info = self.events[event]
 
         return info
-    
+
+
+    def electrodes(self,regs=None):
+        # get pooled list of electrode groups for regions
+        #
+        # arguments:
+        #     regs        (:) string = None, electrode of these regions are returned as an array, default is all regions
+        #
+        # output:
+        #     electrodes       (:) int, sorted by value
+
+        regs, _, _ = self._checkIDs(regs=regs)
+
+        return np.concatenate([list(self.region[r]['e_group'].keys()) for r in regs])
+
 
     def units(self,regs=None,e_groups=None):
         # get pooled list of units for regions
@@ -325,7 +342,7 @@ class Regions:
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
-        # operate per session phase (if some are missing)
+        # operate per session phase (in case some are missing)
         phase_intervals = fmatoolbox.general.consolidateIntervals(self.eventIntervals(),epsilon=0.00001)
         firing_rate = []
         time = []
@@ -351,7 +368,7 @@ class Regions:
 
         # normalize
         if norm:
-            firing_rate[:,1:] /= [len(self.units(r)) for r in regs if r is not None]+[len(self.units(g)) for g in e_groups if g is not None]
+            firing_rate[:,1:] /= [len(self.units(regs=r)) for r in regs if r is not None]+[len(self.units(e_groups=g)) for g in e_groups if g is not None]
 
         return firing_rate
     
