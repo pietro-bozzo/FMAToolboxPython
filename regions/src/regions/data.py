@@ -296,6 +296,9 @@ class Regions:
         # output:
         #     spikes    (:) float, each row is [spike time (s), unit id]
 
+        if state is not None and when is not None:
+            raise ValueError("'state' and 'when' cannot be specified at the same time")
+
         regs, e_groups, state = self._checkIDs(regs=regs,e_groups=e_groups,states=state,fuse=True)
 
         spikes = []
@@ -313,7 +316,12 @@ class Regions:
         if np.any(state != 'all'):
             spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals([state]),shift=shift)
         if when is not None:
-            spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals(when),shift=shift)
+            try:
+                # 1. 'when' is a list of time intervals
+                spikes = fmatoolbox.general.restrict(spikes,when,shift=shift)
+            except:
+                # 2. 'when' contains event names
+                spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals(when),shift=shift)
 
         return spikes
     
@@ -340,6 +348,9 @@ class Regions:
         #     rate        (:,n+m+1) float, every row is [time stamp, firing rates for n regions, firing rates for m electrodes],
         #                 input order of regions and electrodes is preserved
 
+        if states is not None and when is not None:
+            raise ValueError("'states' and 'when' cannot be specified at the same time")
+
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
         # operate per session phase (in case some are missing)
@@ -364,7 +375,12 @@ class Regions:
         if np.any(states != 'all'):
             firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
         if when is not None:
-            firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
+            try:
+                # 1. 'when' is a list of time intervals
+                firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
+            except:
+                # 2. 'when' contains event names
+                firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
 
         # normalize
         if norm:
@@ -389,6 +405,9 @@ class Regions:
         # output:
         #     rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
 
+        if states is not None and when is not None:
+            raise ValueError("'states' and 'when' cannot be specified at the same time")
+
         regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
 
         # operate per session phase
@@ -406,7 +425,12 @@ class Regions:
         if np.any(states != 'all'):
             firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
         if when is not None:
-            firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
+            try:
+                # 1. 'when' is a list of time intervals
+                firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
+            except:
+                # 2. 'when' contains event names
+                firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
 
         return firing_rate
     
