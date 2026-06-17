@@ -454,7 +454,10 @@ class Regions:
         #     intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
         #     size_t       (m) float, size over time, in which every avalanche is separated by a 0
 
+        none_state = states is None
         regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
+        if none_state:
+            states = None
 
         fr = self.firingRate(regs=regs,states=states,when=when,shift=shift,window=window,step=step,smooth=smooth)
         size = {}
