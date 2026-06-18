@@ -157,6 +157,8 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
     #     Ii           (n) bool, optional, indicese of intervals which contain kept samples
 
     samples = np.asarray(samples)
+    if samples.size == 0:
+        samples = np.array([])
     
     # promote 1d arrays to 2d
     if samples.ndim == 1:
