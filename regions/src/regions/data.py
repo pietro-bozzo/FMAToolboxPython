@@ -10,7 +10,7 @@ from collections.abc import Iterable
 class Regions:
     # Handler for multi-region spiking data, stores session metadata and provides access to computed quantities
 
-    def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False):
+    def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False,anat_file=None):
         # construct a Regions object
         #
         # arguments:
@@ -21,6 +21,7 @@ class Regions:
         #     events         (:) string = None, additional events to load (they correspond to extensions of files to load)
         #     load_spikes    bool = True, load spikes (False allows to access events without costly spike loading)
         #     reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
+        #     anat_file      string = None, DESCRIBE
 
         self.session = pathlib.Path(session).parent
         self.basename = pathlib.Path(session).stem
@@ -81,7 +82,13 @@ class Regions:
 
         # 4. load spikes and store them per region
         if load_spikes:
-            self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=regions.loaders.regionDataPath()/'nonlateral.anat',reload=reload)
+            if anat_file is None:
+                anat_file = regions.loaders.regionDataPath() / 'nonlateral.anat'
+            else:
+                anat_file = pathlib.Path(anat_file)
+                if not anat_file.exists():
+                    anat_file = regions.loaders.regionDataPath() / anat_file
+            self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=anat_file,reload=reload)
             if ids:
                 self.region = {r: self.region[r] for r in ids}
             else:

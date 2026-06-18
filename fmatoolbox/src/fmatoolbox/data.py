@@ -23,6 +23,7 @@ def loadSpikeTimes(session:str, output:str='dict', anat_file:str=None, return_el
     #                       'compact', (:,2) array of [timestamps, unit ids]
     #                       'full', (:,2) array of [timestamps, electrode groups, clusters]
     #                       'regions', dict of {region id: dict}, entries are {'spikes': region spikes, 'units': region units}
+    #     anat_file        str = None, DESCRIBE
     #     return_elec      bool = False, if true, return cluster_loc
     #     return_loc       bool = False, if true, return cluster_loc
     #     reload           bool = False, load original files, bypassing Regions/<basename>_spikes.npz backup (for 'output' = 'regions')
