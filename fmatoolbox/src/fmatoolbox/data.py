@@ -280,12 +280,13 @@ def loadEvents(session: str, extra: list[str]):
     # load event files from a session
     #
     # arguments:
-    #     session    string, path to session .xml file, event files must be in session folder
-    #     extra      (:) string, extensions of other event files named basename.extra[i] to load as text files,
-    #                can be 'subdir/extension' to load '.../basename/subdir/basename.extension'
+    #     session      string, path to session .xml file, event files must be in session folder
+    #     extra        (:) string, extensions of other event files named basename.extra[i] to load as text files,
+    #                  can be 'subdir/extension' to load '.../basename/subdir/basename.extension'
     #
     # output:
-    #     events     dict, keys are event names
+    #     events       dict, keys are event names
+    #     cat_names    (:) string, names of events contained in <basename>.cat.evt
 
     session = pathlib.Path(session)
     file_root = session.parent
@@ -295,12 +296,15 @@ def loadEvents(session: str, extra: list[str]):
 
     # load all *.evt files
     events = {}
+    cat_names = []
     for file in file_root.glob("*.evt"):
         try:
             this_events = loadEventFile(file,compact=True)
         except fmatoolbox.exceptions.FileFormatError:
             this_events = {}
-        for event in this_events.keys():
+        if str(file)[-8:] == '.cat.evt':
+            cat_names = list(this_events.keys())
+        for event in this_events:
             # MUST ENFORCE THAT BEGINNING IS FIRST AND END IS SECOND!!
             if event in events:
                 events[event] = np.concatenate((events[event],np.stack([t for t in this_events[event].values()],axis=1)))
@@ -309,12 +313,20 @@ def loadEvents(session: str, extra: list[str]):
 
     # load other file types as text files
     for extension in extra:
+        # handle subfolders, e.g., 'subfolder/name'
         e = pathlib.Path(extension).name
         p = pathlib.Path(extension).parent
-        file_path = file_root / p / (session.with_suffix('').name +'.' + e)
-        events[e] = np.loadtxt(file_path,comments='%',delimiter=',')
+        file_path = file_root / p / (session.with_suffix('').name + '.' + e)
+        try:
+            # load .npz file
+            data = np.load(str(file_path)+'.npz')
+            for e in data:
+                events[e] = data[e]
+        except:
+            # load text file
+            events[e] = np.loadtxt(file_path, comments='%', delimiter=',')
 
-    return events
+    return events, cat_names
 
 
 def loadSpikeWaveforms(session: str):
