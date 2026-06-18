@@ -178,14 +178,18 @@ def loadCluFiles(session:str, rate:float=20000, output:str='dict', anat_file:str
                 spikes[id]['e_group'] = {g: [] for g in np.unique(anat[anat['region'] == id]['electrode'])}
                 sp = []
                 for electrode in spikes[id]['e_group']:
-                    # label units
-                    s = clu_spikes[electrode]
-                    u, idx = np.unique(s[:,1:], axis=0, return_inverse=True)
-                    sp.append(np.stack((s[:,0],idx+unit_count),axis=1))
-                    spikes[id]['e_group'][electrode] = np.arange(unit_count,unit_count+len(u))
-                    unit_count = unit_count + len(u)
-                sp = np.concatenate(sp)
-                spikes[id]['spikes'] = sp[sp[:,0].argsort()] # sort by time
+                    if electrode in clu_spikes:
+                        # label units
+                        s = clu_spikes[electrode]
+                        u, idx = np.unique(s[:,1:], axis=0, return_inverse=True)
+                        sp.append(np.stack((s[:,0],idx+unit_count),axis=1))
+                        spikes[id]['e_group'][electrode] = np.arange(unit_count,unit_count+len(u))
+                        unit_count = unit_count + len(u)
+                if len(sp):
+                    sp = np.concatenate(sp)
+                    spikes[id]['spikes'] = sp[sp[:,0].argsort()] # sort by time
+                else:
+                    spikes[id]['spikes'] = np.array(sp,ndmin=2)
 
             # save
             saveRegionSpikes(spike_file,spikes)
