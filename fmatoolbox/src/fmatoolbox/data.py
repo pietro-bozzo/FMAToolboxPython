@@ -102,8 +102,12 @@ def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, relo
                     for unit in electrode_units:
                         s.append(np.array([spikes_dict[unit], [unit] * spikes_dict[unit].size]).T)
                 # assing spikes, sorted by time
-                s = np.concatenate(s)
-                spikes[id]['spikes'] = s[s[:,0].argsort()]
+                if len(s):
+                    s = np.concatenate(s)
+                    spikes[id]['spikes'] = s[s[:,0].argsort()]
+                else:
+                    spikes[id]['spikes'] = np.array(s,ndmin=2)
+
             # save
             saveRegionSpikes(spike_file,spikes)
 
