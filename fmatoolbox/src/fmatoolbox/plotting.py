@@ -269,20 +269,27 @@ def boxPlot(data, x=None, color=None, label=None, ax:mpla.Axes=None):
     else:
         data = [np.array(d)[~np.isnan(d)] for d in data]
 
+    try:
+        color = mplc.to_rgba(color)
+        color = [color] * len(data)
+    except:
+        pass
+
     lw = ax.spines["left"].get_linewidth() * 0.8
     mksz = ax.spines["left"].get_linewidth() * 2
-
-    medianprops = {'linewidth': lw}      
+    medianprops = {'linewidth': lw}
     boxprops = {'linewidth': lw}
-    if color is not None:
-        medianprops['color'] = color
-        boxprops['color'] = color
-        r, g, b, a = mplc.to_rgba(color)
-        boxprops['facecolor'] = (r, g, b, a*0.2)
     flierprops={'marker':'.', 'markerfacecolor': 'black', 'markersize': mksz}
 
-    ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
-               capprops={'linewidth':lw},flierprops=flierprops)
+    bp = ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},capprops={'linewidth':lw},flierprops=flierprops)
+    if color is not None:
+        for box, col in zip(bp["boxes"],color):
+            r, g, b, a = mplc.to_rgba(col)
+            boxprops['facecolor'] = (r, g, b, a * 0.2)
+            box.set(facecolor=(r, g, b, a*0.2),edgecolor=col)
+        for median, col in zip(bp['medians'],color):
+            median.set_color(col)
+
     if label is not None:
         if x is None:
             x = np.arange(1,len(label)+1)
