@@ -173,14 +173,15 @@ class Regions:
 
         matches = []
         for pattern in patterns:
-            m = re.fullmatch(r"(.*)#(\d+)",pattern) # look for #
+            m = re.fullmatch(r"(.*)#(\d+(?:,\d+)*)", pattern) # look for #
             if m:
-                # take match indexed by 'idx': digit after # (or none)
+                # take match indexed by 'idx': digits after '#' (or none)
                 pat, idx = m.groups()
-                idx = int(idx)
+                idx = [int(i) for i in idx.split(",")]
                 match = [e for e in events if re.fullmatch(pat,e)]
-                if 0 <= idx < len(match):
-                    matches.append(match[idx])
+                for i in idx:
+                    if 0 <= i < len(match):
+                        matches.append(match[i])
             else:
                 # usual regexp
                 matches += [e for e in events if re.fullmatch(pattern,e)]
