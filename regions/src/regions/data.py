@@ -366,9 +366,9 @@ class Regions:
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
-        # find big holes in 'when' intervals, to speed up computation
+        # find big holes in 'when' intervals, to speed up computation, NOTE: might not be speeding it up after all...
         when = self.eventIntervals(when)
-        holes = when[1:,0] - when[:-1,1] > 2000 # s
+        holes = when[1:,0] - when[:-1,1] > 5000 # s
         partition_idx = np.insert(np.cumsum(holes),0,0) # partition_idx[i] indexes partition to which when[i] belongs
         partitions = np.unique(partition_idx)
         do_restrict = shift or len(partitions) != len(partition_idx)
@@ -401,13 +401,6 @@ class Regions:
         if np.any(states != 'all'):
             firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
             warnings.warn("option 'states' is deprecated, use 'when' instead")
-        # if when is not None:
-        #     try:
-        #         # 1. 'when' is a list of time intervals
-        #         firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
-        #     except:
-        #         # 2. 'when' contains event names
-        #         firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
 
         # normalize
         if norm:
