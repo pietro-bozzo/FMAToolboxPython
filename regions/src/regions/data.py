@@ -441,7 +441,7 @@ class Regions:
         return firing_rate
     
 
-    def avalanches(self,regs=None,states=None,when=None,shift=False,thresh=30,window=0.05,step=1,smooth=None,return_fr=False):
+    def avalanches(self,regs=None,states=None,when=None,shift=False,thresh=30,window=0.05,step=1,smooth=None,return_fr=False,norm=False):
         # compute avalanches per region from population firing rate
         #
         # arguments:
@@ -454,6 +454,7 @@ class Regions:
         #     step         float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
         #                  default is no overlap
         #     smooth       float = None, gaussian kernel std for smoothing over time
+        #     norm         bool = False, normalize by neuron number per region
         #
         # output:
         #     sizes        (n) float, avalanche sizes
@@ -466,7 +467,7 @@ class Regions:
         if none_state:
             states = None
 
-        fr = self.firingRate(regs=regs,states=states,when=when,shift=shift,window=window,step=step,smooth=smooth)
+        fr = self.firingRate(regs=regs,states=states,when=when,shift=shift,window=window,step=step,smooth=smooth,norm=norm)
         size = {}
         intervals = {}
         size_t = {}
