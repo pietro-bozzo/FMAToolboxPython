@@ -433,6 +433,8 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
         #    data = data.ravel()
 
         if log:
+            if data.min() <= 0:
+                raise ValueError('log-transforming data requires positive values')
             data = np.log(data + eps) # log-transform data
             this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
             jacobian = np.exp(this_grid) # jacobian term to transform density back to linear
