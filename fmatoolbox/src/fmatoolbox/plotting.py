@@ -449,4 +449,6 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
             this_density = kde(this_grid)
             ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
 
+    ax.set_yticks([])
+
     return grid, density
