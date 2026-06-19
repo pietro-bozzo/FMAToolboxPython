@@ -44,7 +44,7 @@ def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'
     return
 
 
-def makeFigure(title:str, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], format:Literal['paper','poster']='paper'):
+def makeFigure(title:str=None, n:tuple[int,int]|list[int]=[1,1], size:tuple[float,float]=[20,10], format:Literal['paper','poster']='paper'):
     # make a figure
     #
     # arguments:
@@ -403,8 +403,10 @@ def plotIntervals(intervals,alpha=0.3,color='gray',ax=None):
         ax.axvspan(start,stop,alpha=alpha,color=color)
 
 
-def plotPDF(x,log=False,bandwidth='scott',eps=1e-12,n_points=50,color=None,label=None,ax=None,**plot_kwargs):
+def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, color=None, label=None, ax=None, **plot_kwargs):
 
+    if bandwidth is None:
+        bandwidth = 'scott'
     if ax is None:
         ax = plt.gca()
     if isinstance(x,tuple):
