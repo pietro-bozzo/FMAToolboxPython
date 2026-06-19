@@ -419,25 +419,32 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
         color = [color]
         label = [label]
 
+    grid = []
+    density = []
     for i, data in enumerate(x):
-        # cast to array
+        # cast to array and validate
         data = np.asarray(data)
-        if data.ndim == 2 and data.shape[1] == 1:
-            data = data.ravel()
+        if data.size < 2:
+            grid.append([])
+            density.append([])
+            continue
+        data = data[~np.isnan(data)] # always ravels input: loosing a capability of gaussian_kde?
+        #if data.ndim == 2 and data.shape[1] == 1:
+        #    data = data.ravel()
 
         if log:
             data = np.log(data + eps) # log-transform data
-            grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
-            jacobian = np.exp(grid) # jacobian term to transform density back to linear
+            this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
+            jacobian = np.exp(this_grid) # jacobian term to transform density back to linear
         else:
-            grid = np.linspace(data.min(),data.max(),n_points) # linear grid
+            this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid
 
         kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
         if log:
-            density = kde(grid) / jacobian
-            ax.loglog(jacobian,density,color=color[i],label=label[i],**plot_kwargs)
+            this_density = kde(this_grid) / jacobian
+            ax.loglog(jacobian,this_density,color=color[i],label=label[i],**plot_kwargs)
         else:
-            density = kde(grid)
-            ax.plot(grid,density,color=color[i],label=label[i],**plot_kwargs)
+            this_density = kde(this_grid)
+            ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
 
     return grid, density
