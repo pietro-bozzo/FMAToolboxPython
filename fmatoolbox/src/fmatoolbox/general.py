@@ -3,7 +3,7 @@
 import numpy as np
 
 
-def consolidateIntervals(intervals,epsilon=0,duration=0):
+def consolidateIntervals(intervals, epsilon:float=0, duration:float=0):
     # remove overlaps in a set of intervals, yielding its most compact description (the union of its elements)
     # e.g., [[1,4],[2,6]] will become [1,6]
     #

@@ -5,6 +5,7 @@ import fmatoolbox.analysis
 import fmatoolbox.data
 import regions.computation
 import regions.loaders
+import warnings
 from collections.abc import Iterable
 
 class Regions:
@@ -189,7 +190,7 @@ class Regions:
 
     ## getters with minimal processing ##
 
-    def eventIntervals(self,events=None):
+    def eventIntervals(self,events=None,epsilon=0):
         # get [start, stop] intervals (s) for a union and/or intersection of events
         #
         # arguments:
@@ -202,36 +203,42 @@ class Regions:
         #                  note: event names are interpreted as regular expressions and searched with re.fullmatch;
         #                    if a name ends in # followed by digits, they are interpreted as the index of the match to keep
         #                  e.g., 'sleep.*' matches all sleep events, 'sleep.*2' matches the third sleep event (if present)
+        #     epsilon      float = 0, intervals with bounds closer than 'epsilon' are consolidated
         #
         # output:
         #     intervals    (:,2) double, each row is a [start, stop] interval (s)
 
-        # default output
+        # 1. default output
         if events is None:
-            intervals = np.concatenate(list(self.phases.values()))
+            return np.concatenate(list(self.phases.values()))
 
-        # list of events
-        else:
+        # 2. numeric intervals
+        try:
+            intervals = np.array(events,ndmin=2,dtype=float)
+            return intervals
+        except ValueError:
+            pass
 
-            # promote single string to 2d array
-            if isinstance(events,str):
-                events = np.array(events,ndmin=2)
+        # 3. list of lists of event names
 
-            # events is a list of lists of event names
-            intervals = []
-            for ev in events:
-                # 1. union of all intervals in ev
-                ev = np.asarray(ev)
-                if ev.ndim == 0:
-                    raise ValueError("'events' must be like a list of lists of strings")
-                interv = [self.phases[e][:,:2] for e in self._matchEvents(self.phases,ev)]
-                [interv.append(self.states[e][:,:2]) for e in self._matchEvents(self.states,ev)]
-                [interv.append(self.events[e][:,:2]) for e in self._matchEvents(self.events,ev)]
-                if len(interv) == 0:
-                    raise ValueError(f"None of the following was found: {ev}")
-                intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv)))
-            # 2. intersection across different evs
-            intervals = fmatoolbox.general.intersectIntervals(intervals)
+        # promote single string to 2d array
+        if isinstance(events,str):
+            events = np.array(events,ndmin=2)
+
+        intervals = []
+        for ev in events:
+            # 1. union of all intervals in ev
+            ev = np.asarray(ev)
+            if ev.ndim == 0:
+                raise ValueError("'events' must be like a list of lists of strings")
+            interv = [self.phases[e][:,:2] for e in self._matchEvents(self.phases,ev)]
+            [interv.append(self.states[e][:,:2]) for e in self._matchEvents(self.states,ev)]
+            [interv.append(self.events[e][:,:2]) for e in self._matchEvents(self.events,ev)]
+            if len(interv) == 0:
+                raise ValueError(f"None of the following was found: {ev}")
+            intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv)))
+        # 2. intersection across different evs
+        intervals = fmatoolbox.general.intersectIntervals(intervals)
                 
         return intervals
     
@@ -359,34 +366,48 @@ class Regions:
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
-        # operate per session phase (in case some are missing)
-        phase_intervals = fmatoolbox.general.consolidateIntervals(self.eventIntervals(),epsilon=0.00001)
+        # find big holes in 'when' intervals, to speed up computation
+        when = self.eventIntervals(when)
+        holes = when[1:,0] - when[:-1,1] > 2000 # s
+        partition_idx = np.insert(np.cumsum(holes),0,0) # partition_idx[i] indexes partition to which when[i] belongs
+        partitions = np.unique(partition_idx)
+        do_restrict = shift or len(partitions) != len(partition_idx)
+
+        # operate per partition
         firing_rate = []
         time = []
-        for interval in phase_intervals:
+        for p in partitions:
+            intervals = when[partition_idx == p]
             fr_interv = []
+
             if np.any(regs != None):
                 for r in regs:
-                    fr = fmatoolbox.analysis.firingRate(self.spikes(regs=r)[:,0],np.floor(interval[0]),interval[1],window,step,smooth)
+                    fr = fmatoolbox.analysis.firingRate(self.spikes(regs=r)[:,0],np.floor(intervals[0,0]),intervals[-1,1],window,step,smooth)
                     fr_interv.append(fr[:,1])
+
             if np.any(e_groups != None):
                 for e in e_groups:
-                    fr = fmatoolbox.analysis.firingRate(self.spikes(e_groups=e)[:,0],np.floor(interval[0]),interval[1],window,step,smooth)
+                    fr = fmatoolbox.analysis.firingRate(self.spikes(e_groups=e)[:,0],np.floor(intervals[0,0]),intervals[-1,1],window,step,smooth)
                     fr_interv.append(fr[:,1])
+
             firing_rate.append(np.stack(fr_interv,1))
             time.append(fr[:,0])
         firing_rate = np.concatenate((np.concatenate(time).reshape((-1,1)),np.concatenate(firing_rate)),1)
 
+        if do_restrict:
+            firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
+
         # filter by state
         if np.any(states != 'all'):
             firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
-        if when is not None:
-            try:
-                # 1. 'when' is a list of time intervals
-                firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
-            except:
-                # 2. 'when' contains event names
-                firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
+            warnings.warn("option 'states' is deprecated, use 'when' instead")
+        # if when is not None:
+        #     try:
+        #         # 1. 'when' is a list of time intervals
+        #         firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
+        #     except:
+        #         # 2. 'when' contains event names
+        #         firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
 
         # normalize
         if norm:
