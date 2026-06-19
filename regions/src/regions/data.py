@@ -441,24 +441,25 @@ class Regions:
         return firing_rate
     
 
-    def avalanches(self,regs=None,states=None,when=None,shift=False,thresh=30,window=0.05,step=1,smooth=None):
+    def avalanches(self,regs=None,states=None,when=None,shift=False,thresh=30,window=0.05,step=1,smooth=None,return_fr=False):
         # compute avalanches per region from population firing rate
         #
         # arguments:
-        #     regs      (:) str = None, brain regions, default is all loaded regions
-        #     states    (:) str = None, behavioral states, default is all
-        #     when      DESCRIBE, same input as eventIntervals
-        #     shift     bool = False, shift epochs together in time after filtering by state
-        #     thresh    float = 30, percentile to use as threshold, must be in [0,100]
-        #     window    float = 0.05 s, window size to count spikes
-        #     step      float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
-        #               default is no overlap
-        #     smooth    float = None, gaussian kernel std for smoothing over time
+        #     regs         (r) str = None, brain regions, default is all loaded regions
+        #     states       (:) str = None, behavioral states, default is all
+        #     when         DESCRIBE, same input as eventIntervals
+        #     shift        bool = False, shift epochs together in time after filtering by state
+        #     thresh       float = 30, percentile to use as threshold, must be in [0,100]
+        #     window       float = 0.05 s, window size to count spikes
+        #     step         float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+        #                  default is no overlap
+        #     smooth       float = None, gaussian kernel std for smoothing over time
         #
         # output:
         #     sizes        (n) float, avalanche sizes
         #     intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
         #     size_t       (m) float, size over time, in which every avalanche is separated by a 0
+        #     fr           (:,r+1) float, every row is [time stamp, firing rates for r regions], optional
 
         none_state = states is None
         regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
@@ -472,4 +473,6 @@ class Regions:
         for i, r in enumerate(regs):
             size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,i+1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
 
+        if return_fr:
+            return size, intervals, size_t, fr
         return size, intervals, size_t
