@@ -237,7 +237,8 @@ def shuffleEvents(events,offset=0,intervals=None):
 
         # compute and shuffle inter-event intervals
         inter_event_intervals = np.diff(events,prepend=offset,axis=0)
-        inter_event_intervals = np.random.permutation(inter_event_intervals)
+        rng = np.random.default_rng()
+        inter_event_intervals = rng.permutation(inter_event_intervals)
         shuffled = offset + np.cumsum(inter_event_intervals,axis=0)
 
     # 2: multiple columns (also grouping ids)
