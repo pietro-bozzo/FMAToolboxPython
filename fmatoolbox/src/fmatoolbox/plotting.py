@@ -212,7 +212,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     #     aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between
     #     ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     
-    y = np.array(y)
+    y = np.array(y,ndmin=2)
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
 
     # default values
@@ -224,7 +224,9 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     aprop.setdefault('alpha',alpha)
     aprop.setdefault('lw',0)
     if ci is None:
-        if y.shape[0] < 500:
+        if y.shape[0] == 1:
+            ci = lambda x : (x.flatten(), x.flatten())
+        elif y.shape[0] < 500:
             ci = lambda x : spst.bootstrap((x,),np.mean,n_resamples=500,vectorized=True,paired=True).confidence_interval
         else:
             ci = lambda x : (x.mean(axis=0) - x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]), x.mean(axis=0) + x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]))
