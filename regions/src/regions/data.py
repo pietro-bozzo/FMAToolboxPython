@@ -44,17 +44,12 @@ class Regions:
         states = [s.rsplit('/',1)[-1] for s in states] # remove everything before '/' in every event
         events = [e.rsplit('/',1)[-1] for e in events]
 
-        if phases:
-            self.phases = {m : loaded_events[m] for m in self._matchEvents(phase_names,phases)}
-        else:
-            self.phases = {name : loaded_events[name] for name in phase_names}
+        # 2. assign session epochs
+        matches = self._matchEvents(phase_names,phases) if phases else phase_names
+        self.phases = {m: np.stack((loaded_events['sleepm']['beginning'],loaded_events['sleepm']['end']),axis=1) for m in matches}
 
-        # 2. assign states
-        self.states = {}
-        for name in states:
-            if name not in loaded_events:
-                raise ValueError(f'Unable to load {self.basename}.{name}')
-            self.states[name] = loaded_events[name]
+        # 3. assign states
+        self.states = {s: np.stack((loaded_events[s]['col0'],loaded_events[s]['col1']),axis=1) for s in states}
         # if session phases are available, use them to compute special states 'all' and 'other' SHOULD ALSO RESTRICT states AND events TO phases
         if phase_names:
             self.states['all'] = np.array([[self.phases[list(self.phases)[0]][0,0],self.phases[list(self.phases)[-1]][-1,-1]]])
@@ -65,11 +60,26 @@ class Regions:
         # 3. assign events
         self.events = {}
         for name in loaded_events:
-            if name not in phase_names:
+            if name not in phase_names and name not in states:
                 e = loaded_events[name]
-                # special reordering for ripples and spindles
-                if name in ['ripples', 'spindles']:
-                    e = e[:, [0, 2, 1] + list(range(3, e.shape[1]))]
+
+                attributes = list(e.keys())
+                if 'timestamps' in attributes:
+                    e['intervals'] = e['timestamps']
+                    e.pop('timestamps')
+                else:
+                    if name in ['ripples','spindles']:
+                        # special reordering for ripples and spindles
+                        end = np.intersect1d(attributes,['col2','end','stop'])[0]
+                        if 'col1' in attributes:
+                            e['peak'] = e['col1']
+                            e.pop('col1')
+                    else:
+                        end = np.intersect1d(attributes,['col1','end','stop'])[0]
+                    start = np.intersect1d(attributes,['col0','beginning','start'])[0]
+                    e['intervals'] = np.stack((e[start],e[end]),axis=1)
+                    e.pop(start)
+                    e.pop(end)
                 self.events[name] = e
 
         if ids:
@@ -233,7 +243,7 @@ class Regions:
                 raise ValueError("'events' must be like a list of lists of strings")
             interv = [self.phases[e][:,:2] for e in self._matchEvents(self.phases,ev)]
             [interv.append(self.states[e][:,:2]) for e in self._matchEvents(self.states,ev)]
-            [interv.append(self.events[e][:,:2]) for e in self._matchEvents(self.events,ev)]
+            [interv.append(self.events[e]['intervals'][:,:2]) for e in self._matchEvents(self.events,ev)]
             if len(interv) == 0:
                 raise ValueError(f"None of the following was found: {ev}")
             intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv)))
@@ -243,8 +253,8 @@ class Regions:
         return intervals
     
 
-    def eventInfo(self,event):
-        # get event information matrix
+    def eventInfo(self,event,attribute):
+        # get event information, corresponding to a field of the event dictionary
         #
         # arguments:
         #     event    string, event about which to get information
@@ -254,8 +264,9 @@ class Regions:
 
         if event not in self.events:
             raise ValueError(f'Unable to find event {event}')
-        
-        info = self.events[event]
+        if attribute not in self.events[event]:
+            raise ValueError(f'{event} has no attribute {attribute}, valid attributes are: ' + ', '.join(self.events[event].keys()))
+        info = self.events[event][attribute]
 
         return info
 

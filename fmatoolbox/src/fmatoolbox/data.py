@@ -250,7 +250,7 @@ def loadEventFile(filename: str, compact: bool = False):
 
     if compact:
         # group by events, description is of type 'beginning of basename_event1' or 'beginning of basename_event1_1'
-        events = collections.defaultdict(lambda: collections.defaultdict(list))
+        events = {} #collections.defaultdict(lambda: collections.defaultdict(list))
         for t, d in zip(times,descriptions):
             if " of " not in d:
                 raise fmatoolbox.exceptions.FileFormatError(f"Unexpected format: '{d}'")
@@ -269,7 +269,14 @@ def loadEventFile(filename: str, compact: bool = False):
             except:
                 raise ValueError(f"Invalid event ID format: '{full_id}'")
             event_id = part
-            events[event_id][phase].append(t)
+            # concatenate values
+            if event_id in events:
+                if phase in events[event_id]:
+                    events[event_id][phase].append(t)
+                else:
+                    events[event_id][phase] = [t]
+            else:
+                events[event_id] = {phase : [t]}
     else:
         events = { 'time': times, 'description': descriptions }
 
@@ -281,7 +288,7 @@ def loadEvents(session: str, extra: list[str]):
     #
     # arguments:
     #     session      string, path to session .xml file, event files must be in session folder
-    #     extra        (:) string, extensions of other event files named basename.extra[i] to load as text files,
+    #     extra        (:) string, extensions of other event files named <basename>.extra[i] to load,
     #                  can be 'subdir/extension' to load '.../basename/subdir/basename.extension'
     #
     # output:
@@ -295,36 +302,31 @@ def loadEvents(session: str, extra: list[str]):
         extra = [extra]
 
     # load all *.evt files
-    events = {}
     cat_names = []
     for file in file_root.glob("*.evt"):
         try:
-            this_events = loadEventFile(file,compact=True)
+            events = loadEventFile(file,compact=True)
         except fmatoolbox.exceptions.FileFormatError:
-            this_events = {}
+            events = {}
         if str(file)[-8:] == '.cat.evt':
-            cat_names = list(this_events.keys())
-        for event in this_events:
-            # MUST ENFORCE THAT BEGINNING IS FIRST AND END IS SECOND!!
-            if event in events:
-                events[event] = np.concatenate((events[event],np.stack([t for t in this_events[event].values()],axis=1)))
-            else:
-                events[event] = np.stack([t for t in this_events[event].values()],axis=1)
-
-    # load other file types as text files
+            cat_names = list(events.keys())
+    #load other file types as text files
     for extension in extra:
         # handle subfolders, e.g., 'subfolder/name'
         e = pathlib.Path(extension).name
         p = pathlib.Path(extension).parent
-        file_path = file_root / p / (session.with_suffix('').name + '.' + e)
-        try:
+        this_froot = file_root / p / session.stem
+        if this_froot.with_suffix(f'.{e}.npz').exists():
             # load .npz file
-            data = np.load(str(file_path)+'.npz')
-            for e in data:
-                events[e] = data[e]
-        except:
+            data = np.load(this_froot.with_suffix(f'.{e}.npz'))
+            for d in data:
+                events[d] = {f'col{i}': data[d][:,i] for i in range(data[d].shape[1])}
+        elif this_froot.with_suffix(f'.{e}.events.mat').exists():
+            events[e] = scipy.io.loadmat(this_froot.with_suffix(f'.{e}.events.mat'),simplify_cells=True)[e]
+        else:
             # load text file
-            events[e] = np.loadtxt(file_path, comments='%', delimiter=',')
+            data = np.loadtxt(this_froot.with_suffix(f'.{e}'),comments='%',delimiter=',',ndmin=2)
+            events[e] = {f'col{i}': data[:,i] for i in range(data.shape[1])}
 
     return events, cat_names
 
