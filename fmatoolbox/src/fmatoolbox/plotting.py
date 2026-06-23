@@ -197,7 +197,7 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
     return im
 
 
-def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, label: str = None, lprop: dict = None, aprop: dict = None, ax: mpla.Axes = None):
+def semPlot(x, y, ci=None, alpha:float=0.5, zscore:bool|int=False, color=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
     # plot mean +/- s.e.m. of matrix data
     #
     # arguments:
@@ -205,7 +205,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     #     y         (:,n) float, data to plot, each column corresponds to a value of x
     #     ci        function, used to compute confidence intervals for every column of y, must have signature:  low, high = ci(y)
     #     alpha     float = 0.5, shaded area transparency value
-    #     zscore    bool = False, if True, z-score w.r.t. average of y
+    #     zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
     #     color     color = None
     #     label     str = None, legend label for line
     #     lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
@@ -214,6 +214,7 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     
     y = np.array(y,ndmin=2)
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
+    zscore = int(zscore)
 
     # default values
     if lprop is None: lprop = {}
@@ -233,13 +234,17 @@ def semPlot(x, y, ci = None, alpha = 0.5, zscore: bool = False, color = None, la
     if ax is None:
         ax = plt.gca()
 
+    if zscore == 2:
+        # z-score rows of y
+        y = spst.zscore(y,axis=1,nan_policy='omit')
+
     # statistic value for each column
     y_line = np.nanmean(y,axis=0)
     # statistic confidence interval for each column
     y_low, y_high = ci(y)
 
-    # z-score
-    if zscore:
+    if zscore == 1:
+        # z-score results w.r.t. average y
         # mean and standard deviation of average y
         m = y_line.mean()
         s = y_line.std(ddof=1)
