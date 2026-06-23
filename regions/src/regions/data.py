@@ -46,7 +46,7 @@ class Regions:
 
         # 2. assign session epochs
         matches = self._matchEvents(phase_names,phases) if phases else phase_names
-        self.phases = {m: np.stack((loaded_events['sleepm']['beginning'],loaded_events['sleepm']['end']),axis=1) for m in matches}
+        self.phases = {m: np.stack((loaded_events[m]['beginning'],loaded_events[m]['end']),axis=1) for m in matches}
 
         # 3. assign states
         self.states = {s: np.stack((loaded_events[s]['col0'],loaded_events[s]['col1']),axis=1) for s in states}

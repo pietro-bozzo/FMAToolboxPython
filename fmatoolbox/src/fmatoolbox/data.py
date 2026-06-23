@@ -283,7 +283,7 @@ def loadEventFile(filename: str, compact: bool = False):
     return events
 
 
-def loadEvents(session: str, extra: list[str]):
+def loadEvents(session:str, extra:str|list[str]):
     # load event files from a session
     #
     # arguments:
