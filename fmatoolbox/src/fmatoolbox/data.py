@@ -36,7 +36,10 @@ def loadSpikeTimes(session:str, output:str='dict', anat_file:str=None, return_el
     file_root = pathlib.Path(session).with_suffix('')
     cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
     if cell_metrics_file.exists():
-        spikes, electrode_id, cluster_loc = loadCellMetricsFile(session,output=output,anat_file=anat_file,reload=reload)
+        if return_elec or return_loc:
+            spikes, electrode_id, cluster_loc = loadCellMetricsFile(session,output=output,anat_file=anat_file,return_extra=True,reload=reload)
+        else:
+            spikes = loadCellMetricsFile(session,output=output,anat_file=anat_file,reload=reload)
     else:
         if return_elec or return_loc:
             raise ValueError("'return_elec' and 'return_loc' are not implemented for .clu files")
@@ -48,22 +51,22 @@ def loadSpikeTimes(session:str, output:str='dict', anat_file:str=None, return_el
     return out[:2+return_loc:2-return_elec]
 
 
-def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, reload:bool=False):
-
-    if output not in ['dict','compact','full','regions']:
-        raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
+def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, return_extra:bool=False, reload:bool=False):
 
     file_root = pathlib.Path(session).with_suffix('')
-    cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
-    if not cell_metrics_file.exists():
-        raise FileNotFoundError(f'{cell_metrics_file} not found')
 
-    data = scipy.io.loadmat(cell_metrics_file,simplify_cells=True)['cell_metrics']
-    unit_id = data['UID'] - 1
-    electrode_id = data['electrodeGroup'] # starts at 1
-    # starts from 0 CHECK WITH CLUSTER LOC, there's also maxWaveformChannelOrder, there's also Putative cell type!!
-    cluster_loc = data['maxWaveformCh']
-    spikes = data['spikes']['times']
+    # load .cell_metrics.cellinfo.mat file only if necessary
+    if output != 'regions' or reload or return_extra:
+        cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
+        if not cell_metrics_file.exists():
+            raise FileNotFoundError(f'{cell_metrics_file} not found')
+
+        data = scipy.io.loadmat(cell_metrics_file,simplify_cells=True)['cell_metrics']
+        unit_id = data['UID'] - 1
+        electrode_id = data['electrodeGroup'] # starts at 1
+        # starts from 0 CHECK WITH CLUSTER LOC, there's also maxWaveformChannelOrder, there's also Putative cell type!!
+        cluster_loc = data['maxWaveformCh']
+        spikes = data['spikes']['times']
 
     if output == 'dict':
         spikes = dict(zip(unit_id,spikes))
@@ -80,7 +83,7 @@ def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, relo
         spikes = np.stack((np.concatenate(spikes), electrodes, clusters), axis=1)
         spikes = spikes[spikes[:, 0].argsort()]
 
-    else:
+    elif output == 'regions':
         # try loading
         spike_file = file_root.parent / 'Regions' / (file_root.stem + '_spikes.npz')
         if not reload and spike_file.exists():
@@ -107,11 +110,15 @@ def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, relo
                     spikes[id]['spikes'] = s[s[:,0].argsort()]
                 else:
                     spikes[id]['spikes'] = np.array(s,ndmin=2)
-
             # save
             saveRegionSpikes(spike_file,spikes)
 
-    return spikes, electrode_id, cluster_loc
+    else:
+        raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
+
+    if return_extra:
+        return spikes, electrode_id, cluster_loc
+    return spikes
 
 
 def loadCluFiles(session:str, rate:float=20000, output:str='dict', anat_file:str=None, reload:bool=False):
