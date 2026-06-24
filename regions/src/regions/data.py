@@ -264,11 +264,16 @@ class Regions:
 
         if event not in self.events:
             raise ValueError(f'Unable to find event {event}')
-        if attribute not in self.events[event]:
-            raise ValueError(f'{event} has no attribute {attribute}, valid attributes are: ' + ', '.join(self.events[event].keys()))
-        info = self.events[event][attribute]
 
-        return info
+        if attribute not in self.events[event]:
+            if attribute == 'start':
+                return self.events[event]['intervals'][:,0]
+            elif attribute == 'stop':
+                return self.events[event]['intervals'][:,1]
+            else:
+                raise ValueError(f'{event} has no attribute {attribute}, valid attributes are: ' + ', '.join(self.events[event].keys()))
+
+        return self.events[event][attribute]
 
 
     def electrodes(self,regs=None):
