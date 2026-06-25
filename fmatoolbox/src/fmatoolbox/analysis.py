@@ -70,7 +70,7 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     return np.concatenate((time_bins,firing_rate),1)
 
 
-def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,step=1,fast=False):
+def PETH(samples,events,groups=None,g_range=None,limits=None,n_bins=101,step=1,fast=False):
     # compute peri-event time histogram of a signal relative to synchronizing events
     #
     # arguments:
@@ -80,13 +80,13 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,st
     #     events     (m) float, synchronizing events' times, their order is maintained in the output 'mat'
     #     groups     (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
     #     g_range    (2) int = [0,max(groups)], min and max group id
-    #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for )
+    #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
     #     limit      (2) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
     #     n_bins     float = 101, number of time bins around event times
     #     step       int = 1, only for point-process 'samples', for values higher than 1, time bins inside a window will overlap, yielding:
     #                 - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
     #                 - time resolution of bin_size / step
-    #     fast       bool = False, if True, samples are expected to be time sorted (to save computation time)
+    #     fast       bool = False, if True, 'samples' must be time sorted to save computation time (only for point process 'samples')
     #
     # output:
     #     mat        (m,n_bins) float, every row corresponds to samples centered on an event
@@ -115,6 +115,8 @@ def PETH(samples,events,groups=None,g_range=None,limits=[-0.5,0.5],n_bins=101,st
             n_groups -= int(g_range[0])
     else:
         squeeze = samples.shape[1] < 3 # squeeze 'mat' to 2d when 'samples' has only one signal column
+    if limits is None:
+        limits = [-0.5,0.5]
     
     # sort by time
     if not fast:
