@@ -309,15 +309,17 @@ def loadEvents(session:str, extra:str|list[str]):
         extra = [extra]
 
     # load all *.evt files
+    events = {}
     cat_names = []
     for file in file_root.glob("*.evt"):
         try:
-            events = loadEventFile(file,compact=True)
+            events.update(loadEventFile(file,compact=True))
         except fmatoolbox.exceptions.FileFormatError:
-            events = {}
+            pass
         if str(file)[-8:] == '.cat.evt':
             cat_names = list(events.keys())
-    #load other file types as text files
+
+    # load other file types
     for extension in extra:
         # handle subfolders, e.g., 'subfolder/name'
         e = pathlib.Path(extension).name
@@ -329,6 +331,7 @@ def loadEvents(session:str, extra:str|list[str]):
             for d in data:
                 events[d] = {f'col{i}': data[d][:,i] for i in range(data[d].shape[1])}
         elif this_froot.with_suffix(f'.{e}.events.mat').exists():
+            # load .events.mat file
             events[e] = scipy.io.loadmat(this_froot.with_suffix(f'.{e}.events.mat'),simplify_cells=True)[e]
         else:
             # load text file
