@@ -24,7 +24,9 @@ def consolidateIntervals(intervals, epsilon:float=0, duration:float=0):
         raise ValueError("'intervals' must be a (n,2) array")
     if (intervals[:,0] > intervals[:,1]).any():
         raise ValueError("rows of 'intervals' must be increasing")
-    
+
+    # remove [nan nan] rows, handle empty input
+    intervals = intervals[~np.all(np.isnan(intervals),axis=1)]
     if intervals.size == 0:
         return intervals
     
