@@ -246,7 +246,7 @@ class Regions:
             [interv.append(self.events[e]['intervals'][:,:2]) for e in self._matchEvents(self.events,ev)]
             if len(interv) == 0:
                 raise ValueError(f"None of the following was found: {ev}")
-            intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv)))
+            intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv),epsilon=epsilon))
         # 2. intersection across different evs
         intervals = fmatoolbox.general.intersectIntervals(intervals)
                 
