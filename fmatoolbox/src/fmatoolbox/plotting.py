@@ -10,7 +10,7 @@ import scipy.stats as spst
 import scipy as sp
 from collections.abc import Iterable
 from prompt_toolkit.contrib.regular_languages import validation
-from typing import Literal
+from typing import Literal, Callable
 
 
 def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
@@ -197,19 +197,20 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
     return im
 
 
-def semPlot(x, y, ci=None, alpha:float=0.5, zscore:bool|int=False, color=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
-    # plot mean +/- s.e.m. of matrix data
+def semPlot(x, y, ci:Callable=None, zscore:bool|int=False, color=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
+    # plot mean +/- confidence intervals of matrix data
     #
     # arguments:
     #     x         (n) float, x coordinates
     #     y         (:,n) float, data to plot, each column corresponds to a value of x
-    #     ci        function, used to compute confidence intervals for every column of y, must have signature:  low, high = ci(y)
-    #     alpha     float = 0.5, shaded area transparency value
+    #     ci        callable, used to compute confidence intervals for every column of y, must have signature:  low, high = ci(y)
     #     zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
     #     color     color = None
+    #     mode      str = 'area' | 'error', plot 'ci' either as a shaded area or as error bars
+    #     alpha     float = 0.5, shaded area transparency value (only for 'area' mode)
     #     label     str = None, legend label for line
     #     lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
-    #     aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between
+    #     aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between (only for 'area' mode)
     #     ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     
     y = np.array(y,ndmin=2)
@@ -258,8 +259,11 @@ def semPlot(x, y, ci=None, alpha:float=0.5, zscore:bool|int=False, color=None, l
         y_low = y_line - dy_low
         y_high = y_line + dy_high
 
-    ax.plot(x,y_line,**lprop)
-    ax.fill_between(x,y_low,y_high,**aprop)
+    if mode == 'area':
+        ax.plot(x,y_line,**lprop)
+        ax.fill_between(x,y_low,y_high,**aprop)
+    else:
+        ax.errorbar(x,y_line,yerr=[y_low,y_high],**lprop)
 
     return
 
