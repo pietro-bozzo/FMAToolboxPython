@@ -214,6 +214,8 @@ def semPlot(x, y, ci=None, alpha:float=0.5, zscore:bool|int=False, color=None, l
     
     y = np.array(y,ndmin=2)
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
+    if y.size == 0:
+        return
     zscore = int(zscore)
 
     # default values
