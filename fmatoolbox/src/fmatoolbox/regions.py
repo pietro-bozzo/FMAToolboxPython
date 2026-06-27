@@ -1,18 +1,32 @@
+''' Handler for multi-region spiking data, stores session metadata and provides access to computed quantities '''
+
 import pathlib
 import numpy as np
 import re
 import fmatoolbox.analysis
 import fmatoolbox.data
-import regions.loaders
 import warnings
 from collections.abc import Iterable
 
 
-class Regions:
+def _regionDataPath():
+    # get path to fmatoolbox/data/regions/ folder
+
+    # find scr/ directory, data/ must be at same level
+    file_path = pathlib.Path(__file__).resolve()
+    parts = file_path.parts
+    if 'src' not in parts:
+        raise ValueError(f"src/ not found in path")
+    idx = parts.index('src')
+
+    return pathlib.Path(*parts[:idx]) / 'data/regions'
+
+
+class regions:
     # Handler for multi-region spiking data, stores session metadata and provides access to computed quantities
 
     def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False,anat_file=None):
-        # construct a Regions object
+        # construct a regions object
         #
         # arguments:
         #     session        string, path to session .xml file
@@ -92,11 +106,11 @@ class Regions:
         # 4. load spikes and store them per region
         if load_spikes:
             if anat_file is None:
-                anat_file = regions.loaders.regionDataPath() / 'nonlateral.anat'
+                anat_file = _regionDataPath() / 'nonlateral.anat'
             else:
                 anat_file = pathlib.Path(anat_file)
                 if not anat_file.exists():
-                    anat_file = regions.loaders.regionDataPath() / anat_file
+                    anat_file = _regionDataPath() / anat_file
             self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=anat_file,reload=reload)
             if ids:
                 self.region = {r: self.region[r] for r in ids}
