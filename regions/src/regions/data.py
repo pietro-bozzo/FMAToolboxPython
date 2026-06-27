@@ -426,7 +426,7 @@ class Regions:
         return firing_rate
     
 
-    def unitFiringRate(self,regs=None,states=None,when=None,shift=False,window=0.05,step=1,smooth=None):
+    def unitFiringRate(self,regs=None,states=None,when=None,shift=False,window=None,step=None,smooth=None):
         # get units' firing rate
         #
         # arguments:
@@ -444,6 +444,8 @@ class Regions:
 
         if states is not None and when is not None:
             raise ValueError("'states' and 'when' cannot be specified at the same time")
+        if window is None: window = 0.05
+        if step is None: step = 1
 
         regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
 
