@@ -44,23 +44,24 @@ def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'
     return
 
 
-def makeFigure(title:str=None, n:tuple[int,int]|list[int]=[1,1], size:tuple[float,float]=[20,10], format:Literal['paper','poster']='paper'):
+def makeFigure(title:str=None, n:tuple[int,int]|list[int]=[1,1], size:tuple[float,float]=[20,10], projection=None, format:Literal['paper','poster']='paper'):
     # make a figure
     #
     # arguments:
-    #     title      string, figure title
-    #     n          (2,1) int = [1,1], number of subplots rows and columns
-    #     size       (2,1) float = [20,10], figure size (cm)
-    #     format     {'paper','poster'}, increases figure size, font sizes, and axes lines' width
+    #     title         string, figure title
+    #     n             (2,1) int = [1,1], number of subplots rows and columns
+    #     size          (2,1) float = [20,10], figure size (cm)
+    #     projection    str = None, projection of axes
+    #     format        {'paper','poster'}, increases figure size, font sizes, and axes lines' width
     #
     # output:
-    #     fig        matplotlib figure
-    #     axs        iterable of matplotlib.axes.Axes
+    #     fig           matplotlib figure
+    #     axs           iterable of matplotlib.axes.Axes
 
     cm = 1 / 2.54 # inches to centimeter conversion factor
     if format == 'poster':
         size = [s*2.5 for s in size]
-    fig, axs = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True)
+    fig, axs = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True,subplot_kw=dict(projection=projection))
 
     # promote single axis to sequence
     if isinstance(axs,mpla._axes.Axes):
