@@ -358,7 +358,7 @@ class Regions:
     ## functions to compute quantities ##
 
     def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, states:Iterable[str]=None, when=None, shift=False,
-                   window=0.05, step=1, smooth=None, norm=False):
+                   window=None, step=None, smooth=None, norm=False):
         # get region firing rate
         #
         # arguments:
@@ -379,6 +379,8 @@ class Regions:
 
         if states is not None and when is not None:
             raise ValueError("'states' and 'when' cannot be specified at the same time")
+        if window is None: window = 0.05
+        if step is None: step = 1
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
