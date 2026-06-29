@@ -8,7 +8,7 @@ import statsmodels.stats.multitest
 from typing import Callable
 
 
-def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
+def firingRate(spikes,start=None,stop=None,bin_size=None,step=None,smooth=None,u_range=None):
     # estimate istantaneous firing rate from spike times
     #
     # arguments:
@@ -16,19 +16,20 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     #     start          float = min(spike_times) s, time to start count at
     #     stop           float = max(spike_times) s, time to stop count at
     #     bin_size       float = 0.05 s, time bin to count spikes
-    #     step           int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
-    #                    default is no overlap
+    #     step           int = 1, firing rate is computed in windows of length 'bin_size' and overlap 'bin_size' / 'step', default is no overlap
+    #     smooth         float = None, gaussian kernel std for smoothing over time
+    #     u_range        (2) int, range of units to consider in computation, default is [min(spikes[:,1]), max(spikes[:,1])]
+    #                    (boundaries included, only for 2-columns 'spikes')
     #
     # output:
     #     firing_rate    (:,m+1) float, every row is [time stamp, firing rates for m units], m is 1 if spikes has just one column
 
     # validate input
-    try:
-        spikes = np.array(spikes)
-    except Exception as e:
-        raise e
+    spikes = np.asarray(spikes)
+    if bin_size is None: bin_size = 0.05
+    if step is None: step = 1
     if step % 1 or step == 0:
-        raise ValueError('\'step\' must be a non-zero integer')
+        raise ValueError("'step' must be a non-zero integer")
     
     units = []
     if spikes.ndim == 1:
@@ -38,6 +39,10 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     else:
         times = spikes[:,0]
         units = spikes[:,1]
+        if u_range is None:
+            u_range = np.unique(units).astype(int)[[0,-1]]
+        else:
+            u_range = np.array(u_range,dtype=int)
     
     # build time bins, overlapping if requested
     if start is None:
@@ -54,7 +59,7 @@ def firingRate(spikes,start=None,stop=None,bin_size=0.05,step=1,smooth=None):
     else:
         # compute firing rate once per unit and stack into a matrix
         firing_rate = []
-        for u in np.unique(units):
+        for u in range(u_range[0],u_range[-1]+1):
             fr = [np.histogram(times[units==u],bins=tb)[0] for tb in time_bins]
             firing_rate.append(np.array(fr).flatten('F'))
         firing_rate = np.array(firing_rate).T / bin_size
