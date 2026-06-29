@@ -472,7 +472,7 @@ class regions:
         firing_rate = np.zeros((n_times[-1],n_units[-1]))
         for i, interval in enumerate(phase_intervals):
             for j, r in enumerate(regs):
-                fr = fmatoolbox.analysis.firingRate(self.spikes(r),interval[0],interval[1],window,step,smooth)
+                fr = fmatoolbox.analysis.firingRate(self.spikes(r),interval[0],interval[1],window,step,smooth,u_range=self.units(r))
                 firing_rate[n_times[i]:n_times[i+1],n_units[j]:n_units[j+1]] = fr[:,1:]
             firing_rate[n_times[i]:n_times[i+1],0] = fr[:,0]
 
