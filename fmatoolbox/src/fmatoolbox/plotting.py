@@ -44,7 +44,7 @@ def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'
     return
 
 
-def makeFigure(title:str=None, n:tuple[int,int]|list[int]=[1,1], size:tuple[float,float]=[20,10], projection=None, format:Literal['paper','poster']='paper'):
+def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection=None, format:Literal['paper','poster']='paper'):
     # make a figure
     #
     # arguments:
