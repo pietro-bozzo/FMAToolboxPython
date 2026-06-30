@@ -1,9 +1,15 @@
 ''' Specialized analyses for FMAToolbox '''
 
+import fmatoolbox.general
 import numpy as np
 from numpy.ma.core import squeeze
 from scipy.ndimage import gaussian_filter
 import scipy.interpolate as spi
+import scipy.stats as sps
+import scipy.linalg as spl
+import sklearn.decomposition as skdc
+import skimage.filters as skif
+import joblib
 import statsmodels.stats.multitest
 from typing import Callable
 
@@ -216,6 +222,108 @@ def avalanchesFromProfile(x, threshold, time_step, t0=0):
     intervals = np.stack((start, stop), 1) * time_step + t0 - time_step / 2
 
     return sizes, intervals, size_t
+
+
+def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
+    # detect assemblies from PCA + ICA on spike trains
+
+    if window is None: window = 0.025
+
+    fr = firingRate(spikes,bin_size=window)
+    time = fr[:,0]
+    raster = fr[:,1:] * window # discard time, convert to counts
+
+    if when is None:
+        valid = np.full(len(time),True)
+    else:
+        _, valid = fmatoolbox.general.restrict(fr,when,s_ind=True)
+
+    n_times, n_units = raster[valid].shape
+
+    # correlation matrix
+    n = sps.zscore(raster[valid],axis=0)
+    corr = np.cov(n.T)
+    eigenvalues, eigenvectors = spl.eigh(corr) # each column of 'eigenvectors' is an eigenvector
+
+    # keep only significant eigenvectors according to MP distribution criteria CITE PAPER
+    q = n_times / n_units
+    lambda_max = (1 + np.sqrt(1 / q)) ** 2
+    #lambda_max += n_units**(-2/3) # Tracy-Widom correction
+    significant = eigenvalues > lambda_max
+    eigenvalues = eigenvalues[significant]
+    eigenvectors = eigenvectors[:,significant]
+
+    # run ICA
+    projection = ((eigenvectors @ eigenvectors.T) @ n.T).T
+    n_components = sum(significant)
+    ica = skdc.FastICA(n_components=n_components,max_iter=1000)
+    ica = ica.fit(projection)
+    weights = ica.components_.T # (units, components)
+
+    # normalize weights as in Van de Ven et al (2016)
+    weights /= np.linalg.norm(weights,axis=0)
+
+    # sort by variance of the projected signals, which is NOT explained variance per component (as they are not orthogonal)
+    activity = n @ weights # (times, components)
+    variance = activity.var(axis=0,ddof=1) / n_units
+    order = np.argsort(-variance)
+    variance = variance[order]
+    weights = weights[:,order]
+
+    # identify assembly members (one of two methods)
+    weights_otsu = weights.copy()
+    weights_morici = weights.copy()
+    # 1. Otsu threhsolding IS IT ALWAYS SAME AS Morici??
+    for c in range(n_components):
+        w = weights[:,c]
+        thresh = skif.threshold_otsu(np.abs(w))
+        mask = np.abs(w) > thresh
+        weights_otsu[~mask,c] = 0
+    # 2. thresholding from Morici et al (2026), identifying features with an above average contrubtion (if weigth vectors have unit norm, all elements are 1 / np.sqrt(n_units) for a "uniform" vector)
+    mask = np.abs(weights) > 1 / np.sqrt(n_units)
+    weights_morici[~mask] = 0
+    print(np.sum(weights_morici!=0), np.sum(weights_otsu!=0))
+    weights = weights_otsu
+
+    # keep only components with no negative "strong" weights
+    if drop_mix:
+        remove = np.any(weights < 0,axis=0)
+        weights = weights[:,~remove]
+        eigenvalues = eigenvalues[~remove]
+        n_components = sum(~remove)
+
+    # flip signs (as signs are defined up to a per-component flip)
+    #flip = weights.max(axis=0) < -weights.min(axis=0) # let argmax(abs( )) be positive
+    flip = np.sum(weights > 1e-7,axis=0) < np.sum(weights < -1e-7,axis=0)  # let most elements be positive
+    weights[:,flip] *= -1
+
+    # templates, note that they are independent to the sign flip of weight vectors
+    templates = np.empty((n_units,n_units,n_components))
+    for i in range(n_components):
+        template = np.outer(weights[:,i],weights[:,i])
+        np.fill_diagonal(template,0)  # remove the diagonal
+        templates[:,:,i] = template
+
+    return weights, templates, raster, time
+
+
+def reactivationStrength(raster,templates,time=None):
+    # compute reactivation strength of assemblies as quadratic forms between raster and templates
+
+    # following Morici et al. (2026), smooth and z-score raster
+
+    def template_strength(template):
+        return np.nansum(raster * (raster @ template), axis=1)
+
+    n_templates = templates.shape[2]
+    strength = np.column_stack(joblib.Parallel(n_jobs=-1)(joblib.delayed(template_strength)(templates[:,:,i]) for i in range(n_templates)))
+
+    if time is not None:
+        strength = np.column_stack((time,strength))
+
+    # following Morici et al. (2026), peaks are avalanches in reactivation with threshold 5
+
+    return strength
 
 
 # --- statistics functions ---
