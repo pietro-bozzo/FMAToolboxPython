@@ -404,7 +404,7 @@ def pHorzLine(p,t=None,dy=None,color=None,ax=None):
     return
 
 
-def plotIntervals(intervals,alpha=0.3,color='gray',ax=None):
+def plotIntervals(intervals,alpha=0.3,color='gray',ax:mpla.Axes=None):
 
     intervals = np.array(intervals,ndmin=2)
     if intervals.ndim != 2 or intervals.shape[1] != 2:
@@ -417,7 +417,7 @@ def plotIntervals(intervals,alpha=0.3,color='gray',ax=None):
         ax.axvspan(start,stop,alpha=alpha,color=color)
 
 
-def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, color=None, label=None, ax=None, **plot_kwargs):
+def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, color=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
 
     if bandwidth is None:
         bandwidth = 'scott'
@@ -466,3 +466,29 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
     ax.set_yticks([])
 
     return grid, density
+
+
+def plotRaster(spikes, ids=None, compact=None, offset=None, ax:mpla.Axes=None, **plot_kwargs):
+
+    spikes = np.array(spikes,ndmin=2)
+
+    if ids is not None:
+        # keep requested neurons
+        valid = np.isin(spikes[:,1],ids)
+        spikes = spikes[valid,:]
+
+    times = spikes[:,0]
+    units = spikes[:,1]
+    if compact:
+        # relabel units from 1 to N
+        _, units = np.unique(units,return_inverse=True)
+    if offset:
+        units += offset
+
+    if ax is None:
+        ax = plt.gca()
+
+    half_height = .5
+    ax.vlines(times, units-half_height, units+half_height, **plot_kwargs)
+
+    return
