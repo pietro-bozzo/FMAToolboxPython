@@ -24,6 +24,8 @@ class Regions:
         #     reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
         #     anat_file      string = None, DESCRIBE
 
+        warnings.warn("The package regions is deprecated! Use fmatoolbox.regions instead")
+
         self.session = pathlib.Path(session).parent
         self.basename = pathlib.Path(session).stem
         self.rat = self.basename[3:6]
