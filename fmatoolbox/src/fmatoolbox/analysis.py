@@ -2,11 +2,7 @@
 
 import fmatoolbox.general
 import numpy as np
-from numpy.ma.core import squeeze
-from scipy.ndimage import gaussian_filter
-import scipy.interpolate as spi
-import scipy.stats as sps
-import scipy.linalg as spl
+import scipy as sp
 import sklearn.decomposition as skdc
 import skimage.filters as skif
 import joblib
@@ -14,7 +10,7 @@ import statsmodels.stats.multitest
 from typing import Callable
 
 
-def firingRate(spikes,start=None,stop=None,bin_size=None,step=None,smooth=None,u_range=None):
+def firingRate(spikes, start:float=None, stop:float=None, bin_size:float=None, step:int=None, smooth:float=None, u_range:tuple[int,int]=None):
     # estimate istantaneous firing rate from spike times
     #
     # arguments:
@@ -76,7 +72,7 @@ def firingRate(spikes,start=None,stop=None,bin_size=None,step=None,smooth=None,u
 
     # apply smoothing
     if smooth is not None:
-        firing_rate = gaussian_filter(firing_rate,smooth,axes=0)
+        firing_rate = sp.ndimage.gaussian_filter(firing_rate,smooth,axes=0)
 
     return np.concatenate((time_bins,firing_rate),1)
 
@@ -225,25 +221,24 @@ def avalanchesFromProfile(x, threshold, time_step, t0=0):
 
 
 def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
-    # detect assemblies from PCA + ICA on spike trains
+    # detect assemblies from spike trains with PCA + ICA
 
     if window is None: window = 0.025
 
-    fr = firingRate(spikes,bin_size=window)
-    time = fr[:,0]
-    raster = fr[:,1:] * window # discard time, convert to counts
+    raster = firingRate(spikes,bin_size=window)
+    raster[:,1:] *= window # convert to counts
 
+    time = raster[:,0]
     if when is None:
         valid = np.full(len(time),True)
     else:
-        _, valid = fmatoolbox.general.restrict(fr,when,s_ind=True)
-
-    n_times, n_units = raster[valid].shape
+        _, valid = fmatoolbox.general.restrict(time,when,s_ind=True)
 
     # correlation matrix
-    n = sps.zscore(raster[valid],axis=0)
+    n = sp.stats.zscore(raster[valid,1:],axis=0) # discard time column
+    n_times, n_units = n.shape
     corr = np.cov(n.T)
-    eigenvalues, eigenvectors = spl.eigh(corr) # each column of 'eigenvectors' is an eigenvector
+    eigenvalues, eigenvectors = sp.linalg.eigh(corr) # each column of 'eigenvectors' is an eigenvector
 
     # keep only significant eigenvectors according to MP distribution criteria CITE PAPER
     q = n_times / n_units
@@ -304,26 +299,34 @@ def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
         np.fill_diagonal(template,0)  # remove the diagonal
         templates[:,:,i] = template
 
-    return weights, templates, raster, time
+    return weights, templates, raster
 
 
-def reactivationStrength(raster,templates,time=None):
+def reactivationStrength(raster,templates,threshold=5):
     # compute reactivation strength of assemblies as quadratic forms between raster and templates
-
-    # following Morici et al. (2026), smooth and z-score raster
 
     def template_strength(template):
         return np.nansum(raster * (raster @ template), axis=1)
 
+    time = raster[:,0]
+    raster = raster[:,1:]
+
+    # following Morici et al. (2026), smooth and z-score raster
+    raster = sp.ndimage.gaussian_filter(raster,0.5,axes=0)
+    raster = sp.stats.zscore(raster,axis=0)
+
     n_templates = templates.shape[2]
     strength = np.column_stack(joblib.Parallel(n_jobs=-1)(joblib.delayed(template_strength)(templates[:,:,i]) for i in range(n_templates)))
 
-    if time is not None:
-        strength = np.column_stack((time,strength))
-
     # following Morici et al. (2026), peaks are avalanches in reactivation with threshold 5
+    peaks = []
+    for col in range(strength.shape[1]):
+        indices, properties = sp.signal.find_peaks(strength[:,col],height=threshold)
+        peaks.append(np.column_stack((time[indices],strength[indices,col])))
 
-    return strength
+    strength = np.column_stack((time,strength))
+
+    return strength, peaks
 
 
 # --- statistics functions ---
