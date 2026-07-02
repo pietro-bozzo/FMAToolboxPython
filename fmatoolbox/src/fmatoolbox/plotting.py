@@ -198,7 +198,7 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
     return im
 
 
-def semPlot(x, y, ci:Callable=None, zscore:bool|int=False, color=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
+def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
     # plot mean +/- confidence intervals of matrix data
     #
     # arguments:
@@ -218,7 +218,7 @@ def semPlot(x, y, ci:Callable=None, zscore:bool|int=False, color=None, mode:Lite
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
     if y.size == 0:
         return
-    zscore = int(zscore)
+    zscore = 0 if zscore is None else int(zscore)
 
     # default values
     if lprop is None: lprop = {}
@@ -468,17 +468,24 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
     return grid, density
 
 
-def plotRaster(spikes, ids=None, compact=None, offset=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, heigth:float=None, ax:mpla.Axes=None, **plot_kwargs):
 
-    spikes = np.array(spikes,ndmin=2)
+    if heigth is None: heigth = 1
+
+    spikes = np.asarray(spikes)
+    if spikes.ndim == 1:
+        times = spikes
+        units = np.zeros(len(times))
+    else:
+        times = spikes[:,0]
+        units = spikes[:,1]
 
     if ids is not None:
         # keep requested neurons
-        valid = np.isin(spikes[:,1],ids)
-        spikes = spikes[valid,:]
+        valid = np.isin(units,ids)
+        times = times[valid]
+        units = units[valid]
 
-    times = spikes[:,0]
-    units = spikes[:,1]
     if compact:
         # relabel units from 1 to N
         _, units = np.unique(units,return_inverse=True)
@@ -488,7 +495,7 @@ def plotRaster(spikes, ids=None, compact=None, offset=None, ax:mpla.Axes=None, *
     if ax is None:
         ax = plt.gca()
 
-    half_height = .5
+    half_height = heigth / 2
     ax.vlines(times, units-half_height, units+half_height, **plot_kwargs)
 
     return
