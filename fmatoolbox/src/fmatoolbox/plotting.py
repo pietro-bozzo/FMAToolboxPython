@@ -9,7 +9,6 @@ import matplotlib.typing as mplt
 import scipy.stats as spst
 import scipy as sp
 from collections.abc import Iterable
-from prompt_toolkit.contrib.regular_languages import validation
 from typing import Literal, Callable
 
 

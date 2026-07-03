@@ -1,5 +1,4 @@
 ''' Session data handling functions for FMAToolbox '''
-from IPython.core.interactiveshell import is_integer_string
 from typing import Any, Callable
 import pathlib
 import scipy.io
