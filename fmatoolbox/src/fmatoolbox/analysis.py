@@ -184,7 +184,7 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
     return mat, t, m
 
 
-def avalanchesFromProfile(x, threshold, time_step, t0=0):
+def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
     # compute avalanches' sizes and [start,stop] intervals from a time series
     #
     # arguments:
@@ -222,7 +222,7 @@ def avalanchesFromProfile(x, threshold, time_step, t0=0):
     return sizes, intervals, size_t
 
 
-def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
+def cellAssembliesICA(spikes, window:float=None, when=None, drop_mix:bool=False):
     # detect assemblies from spike trains with PCA + ICA
 
     if window is None: window = 0.025
@@ -314,7 +314,7 @@ def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
     return weights, templates, raster
 
 
-def reactivationStrength(raster,templates,threshold=5):
+def reactivationStrength(raster, templates, threshold:float=5):
     # compute reactivation strength of assemblies as quadratic forms between raster and templates
 
     def template_strength(template):
