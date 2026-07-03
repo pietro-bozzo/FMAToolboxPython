@@ -229,13 +229,17 @@ def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
     raster[:,1:] *= window # convert to counts
 
     time = raster[:,0]
-    if when is None:
-        valid = np.full(len(time),True)
-    else:
-        _, valid = fmatoolbox.general.restrict(time,when,s_ind=True)
+    n = raster[:,1:] # discard time column
+    if when is not None:
+        time, valid = fmatoolbox.general.restrict(time,when,s_ind=True)
+        n = n[valid]
+
+    # remove units which never spiked to avoid cov error
+    keep = ~(n==0).all(axis=0)
+    n = n[:,keep]
 
     # correlation matrix
-    n = sp.stats.zscore(raster[valid,1:],axis=0) # discard time column
+    n = sp.stats.zscore(n,axis=0)
     n_times, n_units = n.shape
     corr = np.cov(n.T)
     eigenvalues, eigenvectors = sp.linalg.eigh(corr) # each column of 'eigenvectors' is an eigenvector
@@ -265,10 +269,10 @@ def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
     variance = variance[order]
     weights = weights[:,order]
 
-    # identify assembly members (one of two methods)
+    # identify assembly members (will have to choose one of two methods...)
     weights_otsu = weights.copy()
     weights_morici = weights.copy()
-    # 1. Otsu threhsolding IS IT ALWAYS SAME AS Morici??
+    # 1. Otsu threhsolding
     for c in range(n_components):
         w = weights[:,c]
         thresh = skif.threshold_otsu(np.abs(w))
@@ -277,7 +281,6 @@ def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
     # 2. thresholding from Morici et al (2026), identifying features with an above average contrubtion (if weigth vectors have unit norm, all elements are 1 / np.sqrt(n_units) for a "uniform" vector)
     mask = np.abs(weights) > 1 / np.sqrt(n_units)
     weights_morici[~mask] = 0
-    print(np.sum(weights_morici!=0), np.sum(weights_otsu!=0))
     weights = weights_otsu
 
     # keep only components with no negative "strong" weights
@@ -291,6 +294,13 @@ def cellAssembliesICA(spikes,window=None,when=None,drop_mix=False):
     #flip = weights.max(axis=0) < -weights.min(axis=0) # let argmax(abs( )) be positive
     flip = np.sum(weights > 1e-7,axis=0) < np.sum(weights < -1e-7,axis=0)  # let most elements be positive
     weights[:,flip] *= -1
+
+    # reintroduce units which never spiked
+    if not keep.all():
+        weights_old = weights.copy()
+        weights = np.zeros((len(keep),n_components))
+        weights[keep,:] = weights_old
+        n_units = len(keep)
 
     # templates, note that they are independent to the sign flip of weight vectors
     templates = np.empty((n_units,n_units,n_components))
