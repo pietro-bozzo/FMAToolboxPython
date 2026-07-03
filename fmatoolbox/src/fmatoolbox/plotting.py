@@ -250,8 +250,8 @@ def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color=None, mode:Liter
     if zscore == 1:
         # z-score results w.r.t. average y
         # mean and standard deviation of average y
-        m = y_line.mean()
-        s = y_line.std(ddof=1)
+        m = np.nanmean(y_line)
+        s = np.nanstd(y_line,ddof=1)
         # z-score s.e.m.
         dy_low = (y_line - y_low) / s
         dy_high = (y_high - y_line) / s
