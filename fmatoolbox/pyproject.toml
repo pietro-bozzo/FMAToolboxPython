@@ -9,6 +9,14 @@ description = "Python port of FMAToolbox"
 authors = [{name = "Pietro Bozzo"}]
 readme = ""
 requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "statsmodels",
+    "scikit-learn",
+    "scikit-image",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
