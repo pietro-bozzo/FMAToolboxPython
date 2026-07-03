@@ -77,7 +77,7 @@ def firingRate(spikes, start:float=None, stop:float=None, bin_size:float=None, s
     return np.concatenate((time_bins,firing_rate),1)
 
 
-def PETH(samples,events,groups=None,g_range=None,limits=None,n_bins=101,step=1,fast=False):
+def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple[float,float]=None, n_bins:int=None, bin:float=None, step:int=None, fast:bool=False):
     # compute peri-event time histogram of a signal relative to synchronizing events
     #
     # arguments:
@@ -88,8 +88,9 @@ def PETH(samples,events,groups=None,g_range=None,limits=None,n_bins=101,step=1,f
     #     groups     (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
     #     g_range    (2) int = [0,max(groups)], min and max group id
     #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
-    #     limit      (2) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
+    #     limits     (2) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
     #     n_bins     float = 101, number of time bins around event times
+    #     bin        float = None (s), bin size, can be given instead of 'n_bins', which will be deduced from 'bin' and 'limits'
     #     step       int = 1, only for point-process 'samples', for values higher than 1, time bins inside a window will overlap, yielding:
     #                 - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
     #                 - time resolution of bin_size / step
@@ -122,8 +123,9 @@ def PETH(samples,events,groups=None,g_range=None,limits=None,n_bins=101,step=1,f
             n_groups -= int(g_range[0])
     else:
         squeeze = samples.shape[1] < 3 # squeeze 'mat' to 2d when 'samples' has only one signal column
-    if limits is None:
-        limits = [-0.5,0.5]
+    if limits is None: limits = [-0.5,0.5]
+    if n_bins is None: n_bins = 101 if bin is None else round((limits[1] - limits[0]) / bin)
+    if step is None: step = 1
     
     # sort by time
     if not fast:
