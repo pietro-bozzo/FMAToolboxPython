@@ -154,7 +154,7 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
     #     i_ind        bool = False, if True, return also Ii
     #
     # output:
-    #     samples      (p,m) float, restricted samples, i. e., samples[:,0] fall into intervals
+    #     samples      (p,m) float, restricted samples, i. e., rows of 'samples' whose first element falls into 'intervals'
     #     Is           (n) bool, optional, indicese of original samples which were kept
     #     Ii           (n) bool, optional, indicese of intervals which contain kept samples
 
@@ -163,7 +163,8 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
         samples = np.array([])
     
     # promote 1d arrays to 2d
-    if samples.ndim == 1:
+    squeeze = samples.ndim == 1
+    if squeeze:
         samples = samples.reshape((-1,1))
 
     # consolidate intervals to use vectorized algorithm
@@ -182,6 +183,9 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
         # assign cumulative shifts to samples
         shifts = cum_shift[Ii]
         samples[:,0] = samples[:,0] - shifts - intervals[0,0]
+
+    if squeeze:
+        samples = samples.reshape(-1)
 
     if not s_ind and not i_ind:
         return samples   
