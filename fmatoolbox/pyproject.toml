@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Python port of FMAToolbox"
 authors = [{name = "Pietro Bozzo"}]
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "GPL-3.0-or-later"
 
 requires-python = ">=3.9"
 dependencies = [
@@ -19,6 +19,11 @@ dependencies = [
     "scikit-learn",
     "scikit-image",
 ]
+
+[project.urls]
+Homepage = "https://github.com/pietro-bozzo/FMAToolboxPython"
+Repository = "https://github.com/pietro-bozzo/FMAToolboxPython"
+Issues = "https://github.com/pietro-bozzo/FMAToolboxPython"
 
 [tool.setuptools.packages.find]
 where = ["src"]
