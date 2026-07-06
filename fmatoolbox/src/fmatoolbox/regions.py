@@ -1,5 +1,6 @@
 ''' Handler for multi-region spiking data, stores session metadata and provides access to computed quantities '''
 
+import platformdirs
 import pathlib
 import numpy as np
 import re
@@ -8,18 +9,13 @@ import fmatoolbox.data
 import warnings
 from collections.abc import Iterable
 
-
 def _regionDataPath():
-    # get path to fmatoolbox/data/regions/ folder
+    # get path to fmatoolbox/regions/ dir in user path
 
-    # find scr/ directory, data/ must be at same level
-    file_path = pathlib.Path(__file__).resolve()
-    parts = file_path.parts
-    if 'src' not in parts:
-        raise ValueError(f"src/ not found in path")
-    idx = parts.index('src')
+    data_dir = pathlib.Path(platformdirs.user_data_dir('fmatoolbox','Pietro Bozzo')) / 'regions'
+    data_dir.mkdir(parents=True, exist_ok=True)
 
-    return pathlib.Path(*parts[:idx]) / 'data/regions'
+    return data_dir
 
 
 class regions:
@@ -106,7 +102,7 @@ class regions:
         # 4. load spikes and store them per region
         if load_spikes:
             if anat_file is None:
-                anat_file = _regionDataPath() / 'nonlateral.anat'
+                anat_file = next(_regionDataPath().glob('*.anat'), None)
             else:
                 anat_file = pathlib.Path(anat_file)
                 if not anat_file.exists():
