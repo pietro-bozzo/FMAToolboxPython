@@ -23,7 +23,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/pietro-bozzo/FMAToolboxPython"
 Repository = "https://github.com/pietro-bozzo/FMAToolboxPython"
-Issues = "https://github.com/pietro-bozzo/FMAToolboxPython"
+Issues = "https://github.com/pietro-bozzo/FMAToolboxPython/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
