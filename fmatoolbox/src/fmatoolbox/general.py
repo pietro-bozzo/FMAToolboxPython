@@ -16,10 +16,7 @@ def consolidateIntervals(intervals, epsilon:float=0, duration:float=0):
     # output:
     #     intervals    (:,2) float, consolidated intervals (s)
 
-    try:
-        intervals = np.array(intervals,dtype=float,ndmin=2)
-    except Exception as e:
-        raise TypeError("'intervals' must be convertible to a NumPy array") from e
+    intervals = np.array(intervals,dtype=float,ndmin=2)
     if intervals.shape[1] != 2:
         raise ValueError("'intervals' must be a (n,2) array")
     if (intervals[:,0] > intervals[:,1]).any():
@@ -143,7 +140,7 @@ def intersectIntervals(intervals):
     return intersection
 
 
-def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
+def restrict(samples, intervals, shift:bool=False, s_ind:bool=False, i_ind:bool=False):
     # keep only samples falling in a set of intervals
     #
     # arguments:
@@ -193,7 +190,7 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
     return out[:2+i_ind:2-s_ind]
 
 
-def unshift(samples,intervals):
+def unshift(samples, intervals):
     # perform the opposite operation of option 'shift' in restrict
     #
     # arguments:
@@ -219,7 +216,7 @@ def unshift(samples,intervals):
     return samples
 
 
-def shuffleEvents(events,offset=0,intervals=None):
+def shuffleEvents(events, offset:float=0, intervals=None):
     # shuffle events preserving their inter-event interval
     #
     # arguments:
