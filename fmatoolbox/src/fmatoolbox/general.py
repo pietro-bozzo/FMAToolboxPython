@@ -188,7 +188,7 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
         samples = samples.reshape(-1)
 
     if not s_ind and not i_ind:
-        return samples   
+        return samples
     out = (samples, Is, Ii) # prepare tuple to return requested outputs
     return out[:2+i_ind:2-s_ind]
 
