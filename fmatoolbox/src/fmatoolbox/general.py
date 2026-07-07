@@ -172,9 +172,9 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
 
     # assign and index to each sample time, only odd indeces belong to intervals
     ind = np.digitize(samples[:,0],intervals.flatten())
-    is_ok = (ind % 2).astype(bool) # is_ok[i] is 1 iff samples[i] must be kept
-    samples = samples[is_ok]
-    Ii = (ind[is_ok] - 1) // 2 # Ii[j] indexes interval that contains samples[is_ok][j]
+    Is = (ind % 2).astype(bool) # Is[i] is 1 iff samples[i] must be kept
+    samples = samples[Is]
+    Ii = (ind[Is] - 1) // 2 # Ii[j] indexes interval that contains samples[Is][j]
 
     if shift:
         # cumulative shifts: distances between intervals
@@ -189,7 +189,7 @@ def restrict(samples,intervals,shift=False,s_ind=False,i_ind=False):
 
     if not s_ind and not i_ind:
         return samples   
-    out = (samples, is_ok, Ii) # prepare tuple to return requested outputs
+    out = (samples, Is, Ii) # prepare tuple to return requested outputs
     return out[:2+i_ind:2-s_ind]
 
 
