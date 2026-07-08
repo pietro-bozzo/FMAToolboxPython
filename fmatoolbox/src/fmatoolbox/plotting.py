@@ -31,11 +31,11 @@ def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'
 
     for ax in axs:
         
-        # remove upper and right borders
-        ax.spines[['right','top']].set_visible(False)
+        # remove upper and right borders in catesian axis
+        [ax.spines[spine].set_visible(False) for spine in ['right','top'] if spine in ax.spines]
 
         # adjust thickness and font size
-        ax.spines[['bottom','left']].set_linewidth(lw)
+        [ax.spines[spine].set_linewidth(lw) for spine in ['bottom','left','polar'] if spine in ax.spines]
         ax.tick_params(width=axw,labelsize=axtick)
         ax.xaxis.label.set_fontsize(axfont)
         ax.yaxis.label.set_fontsize(axfont)
