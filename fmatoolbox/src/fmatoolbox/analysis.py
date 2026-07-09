@@ -388,26 +388,19 @@ def MCpValue(surrogate,real,alternative='two-sided'):
     return np.minimum(pvals, 1.0)
 
 
-def holmBonferroni(pvals,alpha=0.05,return_reject=False):
-    """
+def holmBonferroni(pvals, alpha:float=0.05, return_reject:bool=False):
+    '''
     Holm-Bonferroni correction for multiple tests
 
-    Parameters
-    ----------
-    pvals : array-like 
-        array of p-values, NaNs are ignored in the correction procedure and propagated in output
-    alpha : float = 0.05
-        significance level
-    return_reject : bool = False
-        whether to also return rejection decisions
+    arguments:
+        pvals            (n,) float, p values, NaNs are ignored in the correction procedure and propagated in output
+        alpha            float = 0.05, significance level, must be in [0,1]
+        return_reject    bool = False, return also rejection decisions
 
-    Returns
-    -------
-    corrected : ndarray
-        adjusted p-values, preserves input shape
-    reject : ndarray of bool, optional
-        true for hypothesis that can be rejected for given alpha, preserves input shape
-    """
+    output:
+        corrected        (n,) float, adjusted p values
+        reject           (n,) bool, true for hypothesis that can be rejected
+    '''
 
     pvals = np.asarray(pvals)
     original_shape = pvals.shape
@@ -430,45 +423,53 @@ def holmBonferroni(pvals,alpha=0.05,return_reject=False):
     return corrected
 
 
-def maxStatisticTest(data, surrogate, statistic=None, alpha:float=0.05, alternative:str='two-sided'):
-    # conduct a max statistic test over time
-    #
-    # arguments:
-    #     data (n sessions, n times)
-    #     surrogate (n session, n times, n surrogates)
-    
+def maxStatisticTest(data, surrogate, statistic=None, group=None, alpha:float=0.05, alternative:str='two-sided'):
+    '''
+    conduct a max statistic test over time, assessing in which time points the null hypothesis about a statistic across sessions can be rejected
+
+    arguments:
+        data           (sessions, times) float
+        surrogate      (sessions, times, surrogates) float
+        group          (sessions,) int, grouping variable used to aggregate sessions, the statistic is computed per group and then again over groups
+        alpha          float = 0.05, significance level, must be in [0,1]
+        alternative    str = {'two-sided','grater','less'}, test direction, defines the null hypothesis
+    '''
+
     data = np.array(data,ndmin=2)
-    surrogate = np.array(surrogate,ndmin=2)
+    surrogate = np.array(surrogate,ndmin=3)
     if data.shape[:2] != surrogate.shape[:2]:
-        raise ValueError("'data' and 'surrogate' must have the same first two dimensions")
-    if surrogate.ndim != 3:
-        raise ValueError("'surrogate' must have dimensions (sessions, times, surrogates)")
+        raise ValueError("'data' and 'surrogate' must have the same first two dimensions (sessions, times)")
     if statistic is None:
         statistic = lambda x : np.nanmean(x,axis=0)
     n_times = data.shape[1]
     n_surrogates = surrogate.shape[2]
 
     # statistic for real and surrogate data
-    s_real = statistic(data) # (n_times,)
-    s_surrogate = np.zeros((n_times,n_surrogates)) # (n_times,n_surrogates)
-    for i in range(n_surrogates):
-        s_surrogate[:,i] = statistic(surrogate[:,:,i])
+    if group is None:
+        s_real = statistic(data) # (times,)
+        s_surrogate = statistic(surrogate) # (times, surrogates)
+    else:
+        unique_groups = np.unique(group)
+        s_real = [statistic(data[group==g]) for g in unique_groups]
+        s_real = statistic(s_real)
+        s_surrogate = [statistic(surrogate[group==g]) for g in unique_groups]
+        s_surrogate = statistic(s_surrogate)
 
     # p-values per time point
     if alternative == 'greater':
-        s_surrogate = np.min(s_surrogate,axis=0) # (n_surrogates,)
-        p = MCpValue(np.tile(s_surrogate,(n_times,1)).T,s_real,alternative) # (n_times,)
+        s_surrogate = np.min(s_surrogate,axis=0) # (surrogates,)
+        p = MCpValue(np.tile(s_surrogate,(n_times,1)).T,s_real,alternative) # (times,)
     elif alternative == 'less':
         s_surrogate = np.max(s_surrogate,axis=0)
         p = MCpValue(np.tile(s_surrogate,(n_times,1)).T,s_real,alternative)
     elif alternative == 'two-sided':
         # standardize statistic to ensure proper two-tailed test
-        mu = np.mean(s_surrogate,axis=1) # (n_times,)
+        mu = np.mean(s_surrogate,axis=1) # (times,)
         sigma = np.std(s_surrogate,axis=1,ddof=1)
         s_real = np.abs((s_real - mu) / sigma) # abs(z-score( ))
         s_surrogate = (s_surrogate - mu.reshape(-1,1)) / sigma.reshape(-1,1)
-        s_surrogate = np.max(np.abs(s_surrogate),axis=0) # max_t(abs(z-score( ))), i.e., (n_surrogates,)
-        p = MCpValue(np.tile(s_surrogate,(n_times,1)).T,s_real,"greater")
+        s_surrogate = np.max(np.abs(s_surrogate),axis=0) # max_t(abs(z-score( ))), i.e., (surrogates,)
+        p = MCpValue(np.tile(s_surrogate,(n_times,1)).T,s_real,'greater')
     else:
         raise ValueError("'alternative' must be 'two-sided', 'greater' or 'less'")
 
