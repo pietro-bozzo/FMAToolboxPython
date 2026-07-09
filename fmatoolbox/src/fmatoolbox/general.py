@@ -194,7 +194,7 @@ def unshift(samples, intervals):
     # perform the opposite operation of option 'shift' in restrict
     #
     # arguments:
-    #     samples      (:,:,) float, rows are [time stamp, value1, value2, ...]; if 1d, reshaped to (:,1)
+    #     samples      (:,:) float, rows are [time stamp, value1, value2, ...]; if 1d, reshaped to (:,1)
     #     intervals    (:,2) float, rows are [start, stop] times (s) for an interval, previously used to shift `samples`
 
     samples = np.asarray(samples,dtype=float)
@@ -216,32 +216,41 @@ def unshift(samples, intervals):
     return samples
 
 
-def shuffleEvents(events, offset:float=0, intervals=None):
+def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=None):
     # shuffle events preserving their inter-event interval
     #
     # arguments:
-    #     events       (n,) or (:,n) float, every row is either [event time] or [event time, event id]; if 1d, interpreted as (:,1)
+    #     events       (m,) or (m,2) float, every row is either [event time] or [event time, event id]; if 1d, interpreted as (:,1)
     #     offset       float = 0 s, reference time, necessary when events start at a time != 0, e.g., for a portion of a recording
     #                  in [1000 s, 3000 s]; must be smaller than first event time, ignored if 'intervals' are provided
-    #     intervals    (:,2) float = None, rows are [start, stop] times of intervals; if 1d, reshaped to (1,2)
+    #     n            int = 1, number of replications of shuffling (only for vector 'events')
+    #     group        (m,) int, grouping variable to shuffle events separately per group, TO IMPLEMENT
+    #     intervals    (:,2) float = None, rows are [start, stop] times of intervals to restrict shuffle into; if 1d, reshaped to (1,2)
     #
     # output:
-    #     shuffled     (n,) or (:,n) float, shuffled events
+    #     shuffled     (m,) | (m,n) | (m,2) float, shuffled events
 
     events = np.asarray(events)
+    n_dim = events.ndim
+    one_dim = n_dim == 1 or events.shape[1] == 1
+    if offset is None: offset = 0
+    if n is None: n = 1
     if intervals is not None:
-        intervals = np.array(intervals,ndmin=2)
-        n_dim = events.ndim
         events = restrict(events,intervals,shift=True)
         offset = 0
+    rng = np.random.default_rng()
     
     # 1. single-column input (only timestamps)
-    if events.ndim == 1 or events.shape[1] == 1:
+    if one_dim:
 
+        # expand events
+        events = np.tile(events.reshape((-1,1)),(1,n))
         # compute and shuffle inter-event intervals
         inter_event_intervals = np.diff(events,prepend=offset,axis=0)
-        rng = np.random.default_rng()
-        inter_event_intervals = rng.permutation(inter_event_intervals)
+        iei_shape = inter_event_intervals.shape
+        permutation_idx = np.argsort(rng.random(iei_shape),axis=0)
+        inter_event_intervals = inter_event_intervals[permutation_idx, np.arange(iei_shape[1])]
+        # reconstruct shuffled times
         shuffled = offset + np.cumsum(inter_event_intervals,axis=0)
 
     # 2: multiple columns (also grouping ids)
@@ -263,9 +272,13 @@ def shuffleEvents(events, offset:float=0, intervals=None):
         shuffled = shuffled[shuffled[:,0].argsort()]
 
     if intervals is not None:
-        shuffled = unshift(shuffled,intervals)
-        if n_dim == 1:
-            shuffled = shuffled.ravel()
+        if one_dim:
+            shuffled = np.column_stack([unshift(s,intervals) for s in shuffled.T])
+        else:
+            shuffled = unshift(shuffled,intervals)
+
+    if n_dim == 1 and n == 1:
+        shuffled = shuffled.ravel()
 
     return shuffled
 
