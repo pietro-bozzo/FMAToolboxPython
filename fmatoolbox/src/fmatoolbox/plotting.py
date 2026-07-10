@@ -198,20 +198,22 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
 
 
 def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
-    # plot mean +/- confidence intervals of matrix data
-    #
-    # arguments:
-    #     x         (n) float, x coordinates
-    #     y         (:,n) float, data to plot, each column corresponds to a value of x
-    #     ci        callable, used to compute confidence intervals for every column of y, must have signature:  low, high = ci(y)
-    #     zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
-    #     color     color = None
-    #     mode      str = 'area' | 'error', plot 'ci' either as a shaded area or as error bars
-    #     alpha     float = 0.5, shaded area transparency value (only for 'area' mode)
-    #     label     str = None, legend label for line
-    #     lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
-    #     aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between (only for 'area' mode)
-    #     ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    '''
+    plot mean +/- confidence intervals of matrix data
+
+    arguments:
+        x         (n) float, x coordinates
+        y         (:,n) float, data to plot, each column corresponds to a value of x
+        ci        callable, used to compute confidence intervals for every column of y, must have signature:  low, high = ci(y)
+        zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
+        color     color = None
+        mode      str = 'area' | 'error', plot 'ci' either as a shaded area or as error bars
+        alpha     float = 0.5, shaded area transparency value (only for 'area' mode)
+        label     str = None, legend label for line
+        lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
+        aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between (only for 'area' mode)
+        ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    '''
     
     y = np.array(y,ndmin=2)
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
@@ -418,6 +420,20 @@ def plotIntervals(intervals,alpha=0.3,color='gray',ax:mpla.Axes=None):
 
 
 def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, norm=None, color=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+    '''
+    estimate and plot probability density function (PDF) of data
+
+    arguments:
+        x            (n,) tuple | array, data to plot
+        log          bool = False, plot log-transformed PDF
+        bandwidth    float | str = 'scott', bandwidth for gaussian kernel
+        eps          float = 1e-12, small value used to avoid log(0)
+        n_points     int = 50, number of points used to evaluate PDF
+        norm         str = {'density','max'}, normalization mode, 'density' computes PDF, 'max' normalizes its maximum to 1
+        color        color = None, line color
+        label        str = None, legend label for line
+        ax           matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    '''
 
     if bandwidth is None: bandwidth = 'scott'
     if norm is None: norm = 'density'
