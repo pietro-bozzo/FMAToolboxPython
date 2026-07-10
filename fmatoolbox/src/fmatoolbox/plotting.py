@@ -416,12 +416,11 @@ def plotIntervals(intervals,alpha=0.3,color='gray',ax:mpla.Axes=None):
         ax.axvspan(start,stop,alpha=alpha,color=color)
 
 
-def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, color=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, norm=None, color=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
 
-    if bandwidth is None:
-        bandwidth = 'scott'
-    if ax is None:
-        ax = plt.gca()
+    if bandwidth is None: bandwidth = 'scott'
+    if norm is None: norm = 'density'
+    if ax is None: ax = plt.gca()
     if isinstance(x,tuple):
         if color is None:
             color = [None] * len(x)
@@ -457,9 +456,13 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
         kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
         if log:
             this_density = kde(this_grid) / jacobian
+            if norm == 'max':
+                this_density /= this_density.max()
             ax.loglog(jacobian,this_density,color=color[i],label=label[i],**plot_kwargs)
         else:
             this_density = kde(this_grid)
+            if norm == 'max':
+                this_density /= this_density.max()
             ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
 
     ax.set_yticks([])
