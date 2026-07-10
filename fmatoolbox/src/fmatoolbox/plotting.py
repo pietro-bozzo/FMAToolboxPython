@@ -282,6 +282,7 @@ def boxPlot(data, x=None, color=None, label=None, ax:mpla.Axes=None):
     else:
         data = [np.array(d)[~np.isnan(d)] for d in data]
 
+    if color is None: color = 'b'
     try:
         color = mplc.to_rgba(color)
         color = [color] * len(data)
