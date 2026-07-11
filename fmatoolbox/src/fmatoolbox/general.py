@@ -217,68 +217,93 @@ def unshift(samples, intervals):
 
 
 def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=None):
-    # shuffle events preserving their inter-event interval
-    #
-    # arguments:
-    #     events       (m,) or (m,2) float, every row is either [event time] or [event time, event id]; if 1d, interpreted as (:,1)
-    #     offset       float = 0 s, reference time, necessary when events start at a time != 0, e.g., for a portion of a recording
-    #                  in [1000 s, 3000 s]; must be smaller than first event time, ignored if 'intervals' are provided
-    #     n            int = 1, number of replications of shuffling (only for vector 'events')
-    #     group        (m,) int, grouping variable to shuffle events separately per group, TO IMPLEMENT
-    #     intervals    (:,2) float = None, rows are [start, stop] times of intervals to restrict shuffle into; if 1d, reshaped to (1,2)
-    #
-    # output:
-    #     shuffled     (m,) | (m,n) | (m,2) float, shuffled events
+    '''
+    shuffle point-process events (i.e., time stamps) preserving their inter-event interval
+
+    arguments:
+        events       (s,) | (s,f) float, samples to shuffle; m: # samples, f: # features, if 2d, first column contains time stamps
+        offset       float = 0 s, reference time, necessary when events start at a time != 0, e.g., for a portion of a recording
+                     in [1000 s, 3000 s]; must be smaller than first event time, ignored if 'intervals' are provided
+        n            int = 1, number of independent repetitions of the shuffling procedure, changes output shape
+        group        (s,) int, grouping variable to shuffle events separately per group, adds output 'group'
+        intervals    (:,2) float = None, rows are [start, stop] times of intervals to restrict shuffle into; if 1d, reshaped to (1,2)
+
+    output:
+        shuffled     (:,:,) float, shuffled events, shape depends on 'n':
+                     - same as 'events' if 'n' = 1
+                     - (s,f,n), i.e., with an extra dimension for 'n' shuffling repetitions, otherwise
+        group        (:,) int, optional, grouping variable for shuffled events, only returned if 'group' is not None, shape depends on 'n':
+                     - (s,) if 'n' = 1
+                     - (s,n), otherwise
+    '''
 
     events = np.asarray(events)
     n_dim = events.ndim
-    one_dim = n_dim == 1 or events.shape[1] == 1
     if offset is None: offset = 0
     if n is None: n = 1
+    if group is not None: group = np.asarray(group)
     if intervals is not None:
-        events = restrict(events,intervals,shift=True)
+        events, valid = restrict(events,intervals,shift=True,s_ind=True)
         offset = 0
+        if group is not None:
+            group = group[valid]
+
+    if n == 0:
+        if group is not None:
+            return np.zeros(events.shape+(0,)), np.zeros((events.shape[0],0))
+        return np.zeros(events.shape+(0,))
+
     rng = np.random.default_rng()
-    
-    # 1. single-column input (only timestamps)
-    if one_dim:
 
-        # expand events
-        events = np.tile(events.reshape((-1,1)),(1,n))
-        # compute and shuffle inter-event intervals
-        inter_event_intervals = np.diff(events,prepend=offset,axis=0)
-        iei_shape = inter_event_intervals.shape
+    # make 'events' 3d by appending singleton dimensions
+    events = events.reshape(*events.shape, *(1,) * (3 - n_dim)) # (events, features, 1)
+    # sort by time
+    events = events[events[:,0,0].argsort()]
+    # repeat events 'n' times
+    events = np.tile(events,(1,1,n)) # (events, features, shuffle repetitions)
+
+    def shuffleGroup(e):
+        # shuffle inter-event intervals (IEI)
+        iei = np.diff(e[:,0,:],prepend=offset,axis=0)
+        iei_shape = iei.shape
         permutation_idx = np.argsort(rng.random(iei_shape),axis=0)
-        inter_event_intervals = inter_event_intervals[permutation_idx, np.arange(iei_shape[1])]
-        # reconstruct shuffled times
-        shuffled = offset + np.cumsum(inter_event_intervals,axis=0)
+        iei = iei[permutation_idx,np.arange(iei_shape[1])]
+        # reconstruct shuffled samples
+        shuffled = offset + np.cumsum(iei,axis=0) # shuffled times (events, shuffle repetitions)
+        features = e[permutation_idx[:,None,:], np.arange(1,e.shape[1])[None,:,None], np.arange(iei_shape[1])[None,None,:]]
+        shuffled = np.concatenate((shuffled[:,None],features),axis=1) # append shuffled features
+        return shuffled
 
-    # 2: multiple columns (also grouping ids)
+    if group is None:
+        shuffled = shuffleGroup(events)
     else:
-
-        times = events[:,0].reshape((-1,1))
-        ids = events[:,1:]
-        unique_ids = np.unique(ids,axis=0)
-
         shuffled = []
-        for i in unique_ids:
-            # compute and shuffle inter-event intervals per group
-            inter_event_intervals = np.diff(times[(ids==i).all(1)],axis=0,prepend=offset)
-            inter_event_intervals = np.random.permutation(inter_event_intervals)
-            shuffled.append(np.concatenate((offset+np.cumsum(inter_event_intervals,axis=0),np.repeat(i.reshape((1,-1)),len(inter_event_intervals),axis=0)),axis=1))
-
+        unique_groups, g_count = np.unique(group,return_counts=True)
+        for g in unique_groups:
+            shuffled.append(shuffleGroup(events[group==g]))
         # sort by time
-        shuffled = np.concatenate(shuffled)
-        shuffled = shuffled[shuffled[:,0].argsort()]
+        shuffled = np.concatenate(shuffled,axis=0)
+        order = shuffled[:,0,:].argsort(axis=0)
+        shuffled = shuffled[order[:,None,:], np.arange(shuffled.shape[1])[None,:,None], np.arange(shuffled.shape[2])[None,None,:]]
+        # build 'group' for output
+        group = np.repeat(unique_groups,g_count) # use unique output to sort
+        group = group[order] # sort as 'shuffled'
 
     if intervals is not None:
-        if one_dim:
-            shuffled = np.column_stack([unshift(s,intervals) for s in shuffled.T])
-        else:
-            shuffled = unshift(shuffled,intervals)
+        for i in range(n):
+            shuffled[:,:,i] = unshift(shuffled[:,:,i],intervals)
 
     if n_dim == 1 and n == 1:
         shuffled = shuffled.ravel()
+    elif n == 1:
+        shuffled = shuffled[:,:,0]
+
+    if group is not None:
+        if n_dim == 1 and n == 1:
+            group = group.ravel()
+        elif n == 1:
+            group = group[:,0]
+        return shuffled, group
 
     return shuffled
 
