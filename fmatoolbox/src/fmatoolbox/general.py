@@ -241,7 +241,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=N
     n_dim = events.ndim
     if offset is None: offset = 0
     if n is None: n = 1
-    if group is not None: group = np.asarray(group)
+    if group is not None: group = np.asarray(group,dtype=int)
     if intervals is not None:
         events, valid = restrict(events,intervals,shift=True,s_ind=True)
         offset = 0
@@ -258,7 +258,10 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=N
     # make 'events' 3d by appending singleton dimensions
     events = events.reshape(*events.shape, *(1,) * (3 - n_dim)) # (events, features, 1)
     # sort by time
-    events = events[events[:,0,0].argsort()]
+    order = events[:,0,0].argsort(axis=0)
+    events = events[order]
+    if group is not None:
+        group = group[order]
     # repeat events 'n' times
     events = np.tile(events,(1,1,n)) # (events, features, shuffle repetitions)
 
