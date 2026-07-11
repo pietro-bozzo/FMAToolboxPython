@@ -216,7 +216,7 @@ def unshift(samples, intervals):
     return samples
 
 
-def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=None):
+def shuffleEvents(events, offset:float=None, n:int=None, group=None, fast:bool=None, intervals=None):
     '''
     shuffle point-process events (i.e., time stamps) preserving their inter-event interval
 
@@ -226,6 +226,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=N
                      in [1000 s, 3000 s]; must be smaller than first event time, ignored if 'intervals' are provided
         n            int = 1, number of independent repetitions of the shuffling procedure, changes output shape
         group        (s,) int, grouping variable to shuffle events separately per group, adds output 'group'
+        fast         bool = False, if True, 'events' must be time sorted (to save computation time)
         intervals    (:,2) float = None, rows are [start, stop] times of intervals to restrict shuffle into; if 1d, reshaped to (1,2)
 
     output:
@@ -237,6 +238,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=N
                      - (s,n), otherwise
     '''
 
+    # default values
     events = np.asarray(events)
     n_dim = events.ndim
     if offset is None: offset = 0
@@ -248,23 +250,27 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=N
         if group is not None:
             group = group[valid]
 
+    # zero-repetitions case
     if n == 0:
         if group is not None:
             return np.zeros(events.shape+(0,)), np.zeros((events.shape[0],0))
         return np.zeros(events.shape+(0,))
 
-    rng = np.random.default_rng()
-
     # make 'events' 3d by appending singleton dimensions
     events = events.reshape(*events.shape, *(1,) * (3 - n_dim)) # (events, features, 1)
+
     # sort by time
-    order = events[:,0,0].argsort(axis=0)
-    events = events[order]
-    if group is not None:
-        group = group[order]
+    if not fast:
+        order = events[:,0,0].argsort(axis=0)
+        events = events[order]
+        if group is not None:
+            group = group[order]
+
     # repeat events 'n' times
     events = np.tile(events,(1,1,n)) # (events, features, shuffle repetitions)
 
+    # core f to shuffle events of a group
+    rng = np.random.default_rng()
     def shuffleGroup(e):
         # shuffle inter-event intervals (IEI)
         iei = np.diff(e[:,0,:],prepend=offset,axis=0)
@@ -277,6 +283,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=N
         shuffled = np.concatenate((shuffled[:,None],features),axis=1) # append shuffled features
         return shuffled
 
+    # perform shuffling
     if group is None:
         shuffled = shuffleGroup(events)
     else:
@@ -292,10 +299,12 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, intervals=N
         group = np.repeat(unique_groups,g_count) # use unique output to sort
         group = group[order] # sort as 'shuffled'
 
+    # unshift events back into intervals
     if intervals is not None:
         for i in range(n):
             shuffled[:,:,i] = unshift(shuffled[:,:,i],intervals)
 
+    # restore shape
     if n_dim == 1 and n == 1:
         shuffled = shuffled.ravel()
     elif n == 1:
