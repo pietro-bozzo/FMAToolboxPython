@@ -343,41 +343,35 @@ def reactivationStrength(raster, templates, threshold:float=5):
 
 # --- statistics functions ---
 
-def MCpValue(surrogate,real,alternative='two-sided'):
-    """
-    Compute Monte Carlo p-values comparing real statistics to surrogate distributions
+def MCpValue(surrogate,observed,alternative='two-sided'):
+    '''
+    compute Monte Carlo p-values comparing observed statistics to surrogate distributions
 
-    Parameters
-    ----------
-    surrogate : array_like, shape (n_surrogates, n_features)
-        surrogate statistics
-    real : array_like, shape (n_features,)
-        observed statistics
-    alternative : {"two-sided", "greater", "less"}
-        direction of the test
+    arguments:
+        surrogate      (s,f) float, surrogate statistics; s: # surrogates, f: # features
+        observed       (f,) float, observed statistics
+        alternative    str = {"two-sided", "greater", "less"}, test direction
 
-    Returns
-    -------
-    pvals : ndarray, shape (n_features,)
-        Monte Carlo p-values
-    """
+    output:
+        pvals          (f,) float, Monte Carlo p-values
+    '''
 
     surrogate = np.asarray(surrogate)
-    real = np.asarray(real).ravel()
+    observed = np.asarray(observed).ravel()
     if surrogate.ndim == 1:
         surrogate = surrogate.reshape((-1,1))
-    if surrogate.shape[1] != real.shape[0]:
-        raise ValueError("real must have one element for every column of surrogates")
+    if surrogate.shape[1] != observed.shape[0]:
+        raise ValueError("'observed' must have one element for every column of 'surrogates'")
     
     if alternative == "greater":
-        count = np.sum(surrogate >= real, axis=0)
+        count = np.sum(surrogate >= observed, axis=0)
 
     elif alternative == "less":
-        count = np.sum(surrogate <= real, axis=0)
+        count = np.sum(surrogate <= observed, axis=0)
 
     elif alternative == "two-sided":
-        greater = np.sum(surrogate >= real, axis=0)
-        less = np.sum(surrogate <= real, axis=0)
+        greater = np.sum(surrogate >= observed, axis=0)
+        less = np.sum(surrogate <= observed, axis=0)
         count = 2 * np.minimum(greater, less)
 
     else:
