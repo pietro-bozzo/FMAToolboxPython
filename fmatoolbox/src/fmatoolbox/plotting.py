@@ -425,12 +425,13 @@ def plotIntervals(intervals,alpha=0.3,color='gray',ax:mpla.Axes=None):
         ax.axvspan(start,stop,alpha=alpha,color=color)
 
 
-def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, norm=None, color=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotPDF(x, mode:str=None, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, norm=None, color=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
     '''
     estimate and plot probability density function (PDF) of data
 
     arguments:
         x            (n,) tuple | array, data to plot
+        mode         str = {'normal','log','polar'}, DESCRIBE
         log          bool = False, plot log-transformed PDF
         bandwidth    float | str = 'scott', bandwidth for gaussian kernel
         eps          float = 1e-12, small value used to avoid log(0)
@@ -441,7 +442,8 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
         ax           matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     '''
 
-    if bandwidth is None: bandwidth = 'scott'
+    if mode is None: mode = 'normal'
+    if bandwidth is None: bandwidth = 0.05 if mode == 'polar' else 'scott'
     if norm is None: norm = 'density'
     if ax is None: ax = plt.gca()
     if isinstance(x,tuple):
@@ -467,26 +469,46 @@ def plotPDF(x, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_poin
         #if data.ndim == 2 and data.shape[1] == 1:
         #    data = data.ravel()
 
-        if log:
-            if data.min() <= 0:
-                raise ValueError('log-transforming data requires positive values')
-            data = np.log(data + eps) # log-transform data
-            this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
-            jacobian = np.exp(this_grid) # jacobian term to transform density back to linear
-        else:
-            this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid
+        match mode:
+            # 1. ereal-valued data using gaussian kernel density estimator
+            case 'normal':
+                this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid
+                kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
+                this_density = kde(this_grid)
+                if norm == 'max':
+                    this_density /= this_density.max()
+                ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
 
-        kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
-        if log:
-            this_density = kde(this_grid) / jacobian
-            if norm == 'max':
-                this_density /= this_density.max()
-            ax.loglog(jacobian,this_density,color=color[i],label=label[i],**plot_kwargs)
-        else:
-            this_density = kde(this_grid)
-            if norm == 'max':
-                this_density /= this_density.max()
-            ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
+            # 2. log-transformed data using gaussian kernel density estimator
+            case 'log':
+                if data.min() <= 0:
+                    raise ValueError('log-transforming data requires positive values')
+                data = np.log(data + eps) # log-transform data
+                this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
+                jacobian = np.exp(this_grid) # jacobian term to transform density back to linear
+                kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
+                this_density = kde(this_grid) / jacobian
+                if norm == 'max':
+                    this_density /= this_density.max()
+                ax.loglog(jacobian,this_density,color=color[i],label=label[i],**plot_kwargs)
+
+            # 3. circular data using von-Mises kernel density estimator
+            case 'polar':
+                data = np.mod(data,2*np.pi)
+                this_grid = np.linspace(0,2*np.pi,n_points) # linear grid in [0,2*pi]
+                this_density = np.zeros_like(this_grid)
+                for theta in data:
+                    this_density += spst.vonmises.pdf(this_grid-theta,1/bandwidth)
+                if norm == 'max':
+                    this_density /= this_density.max()
+                else:
+                    this_density /= len(data)
+                this_grid = np.concatenate((this_grid,this_grid+2*np.pi))
+                this_density = np.concatenate((this_density,this_density))
+                ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
+
+        grid.append(this_grid)
+        density.append(this_density)
 
     ax.set_yticks([])
 
