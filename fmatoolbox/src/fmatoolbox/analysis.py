@@ -393,7 +393,7 @@ def holmBonferroni(pvals, alpha:float=0.05, return_reject:bool=False):
 
     output:
         corrected        (n,) float, adjusted p values
-        reject           (n,) bool, true for hypothesis that can be rejected
+        reject           (n,) bool, optional, true for hypothesis that can be rejected
     '''
 
     pvals = np.asarray(pvals)
