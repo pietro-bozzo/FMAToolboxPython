@@ -141,23 +141,26 @@ def plotXY(data,start=None,stop=None,color=None,label=None,ax=None):
     return
 
 
-def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float = None, zscore = None, sortby = None, sortax: int = 0,
-                 xzoom: float = None, yzoom: float = None, x = None, y = None, aspect: float = 3/4, ax = None):
-    # plot a 2D array as a colormap with optional normalization, sorting, and resampling
-    #
-    # arguments:
-    #     data            (n,m) float, data to visualize, rows correspond to first dimension
-    #     vmin, vmax      float = None, lower / upper bound of the colormap, if None uses autoscale
-    #     zscore          int | 'all' = None, if int, specifies axis along which to z-score `data`; if 'all', compute z-score over whole array,
-    #                     if None, no normalization is applied
-    #     sortby          callable | 'peak' = None, optional method used to sort `data` along `sortax` (after optional z-scoring), either:
-    #                     - 'peak', sort rows or columns by the index of their maximum value along the opposite axis.
-    #                     - callable, must have signature ``f(data) -> array_like`` and return a 1D array used to sort data along `sortax`
-    #     sortax          int = 0, axis along which sorting is performed
-    #     xzoom, yzoom    float = None, optional horizontal / vertical resampling factor passed to ``scipy.ndimage.zoom`` (after sorting)
-    #     x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
-    #     aspect          float = 3/4, image aspect ratio
-    #     ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, sortby:npt.NDArray[np.floating]|Callable|str=None, sortax:int=0,
+                 xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=3/4, ax=None):
+    '''
+    plot a 2D array as a colormap with optional normalization, sorting, and resampling
+
+    arguments:
+        data            (n,m) float, data to visualize, rows correspond to first dimension
+        vmin, vmax      float = None, lower / upper bound of the colormap, if None uses autoscale
+        zscore          int | 'all' = None, if int, specifies axis along which to z-score `data`; if 'all', compute z-score over whole array,
+                        if None, no normalization is applied
+        sortby          (:,) int | callable | 'peak' = None, optional method used to sort `data` along `sortax` (after optional z-scoring), either:
+                        - 'peak', sort rows or columns by the index of their maximum value along the opposite axis
+                        - (:,) int, array of indeces to sort data along `sortax`
+                        - callable, must have signature ``f(data) -> array_like`` and return a 1D array used to sort data along `sortax`
+        sortax          int = 0, axis along which sorting is performed
+        xzoom, yzoom    float = None, optional horizontal / vertical resampling factor passed to ``scipy.ndimage.zoom`` (after sorting)
+        x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
+        aspect          float = 3/4, image aspect ratio
+        ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    '''
 
     # store original shape in case data neds to be zoomed
     n_y, n_x = data.shape
@@ -165,12 +168,15 @@ def plotColorMap(data: npt.NDArray[np.floating], vmin: float = None, vmax: float
     if zscore is not None:
         if zscore == 'all':
             zscore = None
-        data = spst.zscore(data,axis=zscore)
+        data = spst.zscore(data,axis=zscore,nan_policy='omit')
 
     if sortby is not None:
-        if sortby == 'peak':
+        if isinstance(sortby,str) and sortby == 'peak':
             sortby = lambda x : np.argsort(np.argmax(x,1-sortax))
-        sort_idx = sortby(data)
+        elif callable(sortby):
+            sort_idx = sortby(data)
+        else:
+            sort_idx = sortby
         data = data[sort_idx,:] if sortax == 0 else data[:,sort_idx]
 
     if xzoom is not None or yzoom is not None:
