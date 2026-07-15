@@ -396,7 +396,8 @@ class regions:
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
-        # find big holes in 'when' intervals, to speed up computation, NOTE: it is actually number of time bins which defines big!
+        # find big holes in 'when' intervals, to speed up computation
+        # NOTE: it is actually number of time bins which defines big! Also, this looks every element of spikes many times, maybe useless!
         when = self.eventIntervals(when)
         holes = when[1:,0] - when[:-1,1] > 5000 # s
         partition_idx = np.insert(np.cumsum(holes),0,0) # partition_idx[i] indexes partition to which when[i] belongs
@@ -470,7 +471,7 @@ class regions:
         firing_rate = np.zeros((n_times[-1],n_units[-1]))
         for i, interval in enumerate(phase_intervals):
             for j, r in enumerate(regs):
-                fr = fmatoolbox.analysis.firingRate(self.spikes(r),interval[0],interval[1],window,step,smooth,u_range=self.units(r))
+                fr = fmatoolbox.analysis.istantaneousRate(self.spikes(r),start=interval[0],stop=interval[1],bin=window,step=step,smooth=smooth,g_range=self.units(r))
                 firing_rate[n_times[i]:n_times[i+1],n_units[j]:n_units[j+1]] = fr[:,1:]
             firing_rate[n_times[i]:n_times[i+1],0] = fr[:,0]
 
