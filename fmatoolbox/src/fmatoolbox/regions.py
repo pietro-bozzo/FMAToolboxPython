@@ -369,23 +369,25 @@ class regions:
 
     def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, states:Iterable[str]=None, when=None, shift=False,
                    window=None, step=None, smooth=None, norm=False):
-        # get region firing rate
-        #
-        # arguments:
-        #     regs        (n) string = None, brain regions to compute firing rate of, default is all regions
-        #     e_groups    (m) int = None, electrode groups (starting at 1) to compute firing rate of, default is none
-        #     states      (:) string = None, behavioral states, default is all
-        #     when        DESCRIBE, same input as eventIntervals
-        #     shift       bool = False, shift epochs together in time after filtering by state
-        #     window      float = 0.05, window size to count spikes
-        #     step        int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
-        #                 default is no overlap
-        #     smooth      float = None, gaussian kernel std for smoothing over time
-        #     norm        bool = False, normalize by neuron number per region
-        #
-        # output:
-        #     rate        (:,n+m+1) float, every row is [time stamp, firing rates for n regions, firing rates for m electrodes],
-        #                 input order of regions and electrodes is preserved
+        '''
+        get region firing rate
+
+        arguments:
+            regs        (n) string = None, brain regions to compute firing rate of, default is all regions
+            e_groups    (m) int = None, electrode groups (starting at 1) to compute firing rate of, default is none
+            states      (:) string = None, behavioral states, default is all
+            when        DESCRIBE, same input as eventIntervals
+            shift       bool = False, shift epochs together in time after filtering by state
+            window      float = 0.05, window size to count spikes
+            step        int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+                        default is no overlap
+            smooth      float = None, gaussian kernel std for smoothing over time
+            norm        bool = False, normalize by neuron number per region
+
+        output:
+            rate        (:,n+m+1) float, every row is [time stamp, firing rates for n regions, firing rates for m electrodes],
+                        input order of regions and electrodes is preserved
+        '''
 
         if states is not None and when is not None:
             raise ValueError("'states' and 'when' cannot be specified at the same time")
@@ -394,7 +396,7 @@ class regions:
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
-        # find big holes in 'when' intervals, to speed up computation, NOTE: might not be speeding it up after all...
+        # find big holes in 'when' intervals, to speed up computation, NOTE: it is actually number of time bins which defines big!
         when = self.eventIntervals(when)
         holes = when[1:,0] - when[:-1,1] > 5000 # s
         partition_idx = np.insert(np.cumsum(holes),0,0) # partition_idx[i] indexes partition to which when[i] belongs
@@ -410,12 +412,12 @@ class regions:
 
             if np.any(regs != None):
                 for r in regs:
-                    fr = fmatoolbox.analysis.firingRate(self.spikes(regs=r)[:,0],np.floor(intervals[0,0]),intervals[-1,1],window,step,smooth)
+                    fr = fmatoolbox.analysis.istantaneousRate(self.spikes(regs=r)[:,0],start=np.floor(intervals[0,0]),stop=intervals[-1,1],bin=window,step=step,smooth=smooth)
                     fr_interv.append(fr[:,1])
 
             if np.any(e_groups != None):
                 for e in e_groups:
-                    fr = fmatoolbox.analysis.firingRate(self.spikes(e_groups=e)[:,0],np.floor(intervals[0,0]),intervals[-1,1],window,step,smooth)
+                    fr = fmatoolbox.analysis.istantaneousRate(self.spikes(e_groups=e)[:,0],start=np.floor(intervals[0,0]),stop=intervals[-1,1],bin=window,step=step,smooth=smooth)
                     fr_interv.append(fr[:,1])
 
             firing_rate.append(np.stack(fr_interv,1))
@@ -428,7 +430,7 @@ class regions:
         # filter by state
         if np.any(states != 'all'):
             firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
-            warnings.warn("option 'states' is deprecated, use 'when' instead")
+            warnings.warn("option 'states' is deprecated, use 'when' instead!")
 
         # normalize
         if norm:
