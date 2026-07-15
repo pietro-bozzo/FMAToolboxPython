@@ -7,7 +7,84 @@ import sklearn.decomposition as skdc
 import skimage.filters as skif
 import joblib
 import statsmodels.stats.multitest
+import warnings
 from typing import Callable
+
+
+def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None, step:int=None, smooth:float=None, g_range:tuple[int,int]=None):
+    '''
+    estimate the istantaneous rate of a point process from a realization of its time stamps, e.g., the firing rate from spike times
+
+    arguments:
+        samples     (n,:) float, every row is either [sample time (s)] or [sample time (s), process id]; if 1d, interpreted as (n,1)
+        start       float = min(samples[:,0]) s, time to start count at
+        stop        float = max(samples[:,0]) s, time to stop count at
+        bin         float = 0.05 s, time bin to count samples
+        step        int = 1, rate is computed in windows of length 'bin' and overlap 'bin' / 'step', default is no overlap
+        smooth      float = None, gaussian kernel std to smooth rate over time
+        g_range     (2) int, range of groups (process ids) to consider, default is [min(samples[:,1]), max(samples[:,1])]
+                    (boundaries included, only for 2-columns 'samples')
+
+    output:
+        rate        (:,g+1) float, every row is [time stamp, rates for g processes], g is 1 if 'samples' has just one column
+    '''
+
+    # validate input
+    samples = np.asarray(samples)
+    if bin is None: bin = 0.05
+    if step is None: step = 1
+    if step % 1 or step == 0:
+        raise ValueError("'step' must be a non-zero integer")
+
+    groups = []
+    if samples.ndim == 1:
+        times = samples
+    elif samples.shape[1] == 1:
+        times = samples.reshape(-1)
+    else:
+        times = samples[:,0]
+        groups = samples[:,1]
+        if g_range is None:
+            g_range = np.unique(groups).astype(int)[[0,-1]]
+        else:
+            g_range = np.array(g_range,dtype=int)
+    if start is None: start = times.min()
+    if stop is None: stop = times.max()
+
+    def histogramVectorized(x,nbins):
+        a, b = x.shape
+        # assign bin indeces
+        bin_idx = (x / bin).astype(int) # bin_idx = 0, bin_idx = n_bins + 1 after 'stop'
+        bin_idx = np.clip(bin_idx,0,nbins-1)
+        offset = np.arange(b)[None,:] * nbins
+        hist = np.bincount((bin_idx+offset).ravel(), minlength=nbins*b).reshape(b,nbins).T
+        return hist
+
+    # repeat 'times' by 'step' times
+    times = np.tile(times[:,None],(1,step)) # (times, step)
+    # shift by: 'start', 'bin' to add bin before 'start', overlap for each repetition
+    times = times - start + bin - np.arange(step)*(bin/step)
+    # parameters
+    n_bins = int((stop + bin - start) // bin)
+    n_bins2 = n_bins + 2 # add two bins: first for 'samples' before 'start', last for 'samples' after 'stop'
+    if len(groups) == 0:
+        hist = histogramVectorized(times,n_bins2)
+        rate = (hist[1:-1] / bin).ravel() # remove data outside [start, stop], convert to rate (Hz), flatten
+    else:
+        rate = []
+        for g in range(g_range[0],g_range[-1] + 1):
+            hist = histogramVectorized(times[groups==g],n_bins2)
+            rate.append((hist[1:-1]).ravel())
+        rate = np.array(rate).T / bin
+
+    # make time axis
+    t = start + bin / 2 + np.arange(0,n_bins * bin,bin / step)
+
+    # apply smoothing
+    if smooth is not None:
+        firing_rate = sp.ndimage.gaussian_filter(firing_rate,smooth,axes=0)
+
+    return np.column_stack((t,rate))
 
 
 def firingRate(spikes, start:float=None, stop:float=None, bin_size:float=None, step:int=None, smooth:float=None, u_range:tuple[int,int]=None):
@@ -25,6 +102,8 @@ def firingRate(spikes, start:float=None, stop:float=None, bin_size:float=None, s
     #
     # output:
     #     firing_rate    (:,m+1) float, every row is [time stamp, firing rates for m units], m is 1 if spikes has just one column
+
+    warnings.warn("firingRate is deprecated, use istantaneousRate instead!", DeprecationWarning)
 
     # validate input
     spikes = np.asarray(spikes)
