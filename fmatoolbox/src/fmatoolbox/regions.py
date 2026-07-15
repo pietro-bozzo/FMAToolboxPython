@@ -57,11 +57,14 @@ class regions:
         # 2. assign session epochs
         matches = self._matchEvents(phase_names,phases) if phases else phase_names
         self.phases = {m: np.stack((loaded_events[m]['beginning'],loaded_events[m]['end']),axis=1) for m in matches}
+        epoch_intervals = np.concatenate(list(self.phases.values()))
 
         # 3. assign states
         self.states = {s: np.stack((loaded_events[s]['col0'],loaded_events[s]['col1']),axis=1) for s in states}
-        # if session phases are available, use them to compute special states 'all' and 'other' SHOULD ALSO RESTRICT states AND events TO phases
         if phase_names:
+            # restrict states to session epochs
+            self.states = {s: fmatoolbox.general.restrict(self.states[s],epoch_intervals) for s in self.states}
+            # build special states 'all' and 'other'
             self.states['all'] = np.array([[self.phases[list(self.phases)[0]][0,0],self.phases[list(self.phases)[-1]][-1,-1]]])
             self.states['other'] = self.states['all']
             for name in states:
@@ -90,6 +93,12 @@ class regions:
                     e['intervals'] = np.stack((e[start],e[end]),axis=1)
                     e.pop(start)
                     e.pop(end)
+
+                # restrict to session epochs
+                if phase_names:
+                    _, valid = fmatoolbox.general.restrict(e['intervals'],epoch_intervals,s_ind=True)
+                    e = {k: v[valid] for k, v in e.items()}
+
                 self.events[name] = e
 
         if ids:
@@ -115,7 +124,7 @@ class regions:
             if not self.all_events:
                 # restrict spikes to session phases
                 for id in self.ids:
-                    self.region[id]['spikes'] = fmatoolbox.general.restrict(self.region[id]['spikes'],self.eventIntervals())
+                    self.region[id]['spikes'] = fmatoolbox.general.restrict(self.region[id]['spikes'],epoch_intervals)
 
         return
     
