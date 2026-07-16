@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from typing import Literal, Callable
 
 
-def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
+def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
     # adjust axes properties to emprove figure appearance
     #
     # arguments:
@@ -43,7 +43,7 @@ def adjustAxes(axs:Iterable[mpla.Axes], format:Literal['paper','poster']='paper'
     return
 
 
-def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection=None, format:Literal['paper','poster']='paper'):
+def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection:str=None, format:Literal['paper','poster']='paper'):
     # make a figure
     #
     # arguments:
@@ -72,7 +72,7 @@ def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[
     return fig, axs
 
 
-def setProp(axs:Iterable[mpla.Axes], xlabelcolor:dict[int,mplt.ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
+def setProp(axs:mpla.Axes|Iterable[mpla.Axes], xlabelcolor:dict[int,mplt.ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
     # set multiple axes properties at once
     #
     # arguments:
@@ -104,7 +104,7 @@ def setProp(axs:Iterable[mpla.Axes], xlabelcolor:dict[int,mplt.ColorType]=None, 
     return
 
 
-def saveFigure(fig,fname,format):
+def saveFigure(fig, fname:str, format:str):
 
     # promote single format to iterable
     if isinstance(format,str):
@@ -115,7 +115,7 @@ def saveFigure(fig,fname,format):
     return
 
 
-def plotXY(data,start=None,stop=None,color=None,label=None,ax=None):
+def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None):
     # plot columns of 'data', interpreting the first as the x axis and all others as y values
 
     data = np.array(data, ndmin=2)
@@ -142,7 +142,7 @@ def plotXY(data,start=None,stop=None,color=None,label=None,ax=None):
 
 
 def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, sortby:npt.NDArray[np.floating]|Callable|str=None, sortax:int=0,
-                 xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=3/4, ax=None):
+                 xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=3/4, ax:mpla.Axes=None):
     '''
     plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
@@ -203,7 +203,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     return im
 
 
-def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
+def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
     '''
     plot mean +/- confidence intervals of matrix data
 
@@ -220,6 +220,7 @@ def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color=None, mode:Liter
         aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between (only for 'area' mode)
         ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     '''
+    # NOTE: should maybe change y to match plt.plot: each row of 'y' corresponds to a values of 'x'
     
     y = np.array(y,ndmin=2)
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
@@ -276,7 +277,7 @@ def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color=None, mode:Liter
     return
 
 
-def boxPlot(data, x=None, color=None, label=None, ax:mpla.Axes=None):
+def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None):
 
     if ax is None:
         ax = plt.gca()
@@ -381,7 +382,7 @@ def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axe
     return
 
 
-def pHorzLine(p,t=None,dy=None,color=None,ax=None):
+def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None):
     # p: (n_times, n_cond)
 
     p = np.asarray(p).astype(float)
@@ -412,7 +413,7 @@ def pHorzLine(p,t=None,dy=None,color=None,ax=None):
     return
 
 
-def plotIntervals(intervals,alpha=0.3,color='gray',ax:mpla.Axes=None):
+def plotIntervals(intervals, alpha=0.3, color:mplt.ColorType='gray', ax:mpla.Axes=None):
 
     intervals = np.array(intervals,ndmin=2)
     if intervals.ndim != 2 or intervals.shape[1] != 2:
@@ -425,14 +426,14 @@ def plotIntervals(intervals,alpha=0.3,color='gray',ax:mpla.Axes=None):
         ax.axvspan(start,stop,alpha=alpha,color=color)
 
 
-def plotPDF(x, mode:str=None, log:bool=False, bandwidth:float|str=None, eps:float=1e-12, n_points:int=50, norm=None, color=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, norm=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
     '''
     estimate and plot probability density function (PDF) of data
 
     arguments:
         x            (n,) tuple | array, data to plot
         mode         str = {'normal','log','polar'}, DESCRIBE
-        log          bool = False, plot log-transformed PDF
+        log          bool = False, plot log-transformed PDF, DEPRECATED
         bandwidth    float | str = 'scott', bandwidth for gaussian kernel
         eps          float = 1e-12, small value used to avoid log(0)
         n_points     int = 50, number of points used to evaluate PDF
@@ -444,6 +445,8 @@ def plotPDF(x, mode:str=None, log:bool=False, bandwidth:float|str=None, eps:floa
 
     if mode is None: mode = 'normal'
     if bandwidth is None: bandwidth = 0.05 if mode == 'polar' else 'scott'
+    if eps is None: eps = 1e-12
+    if n_points is None: n_points = 50
     if norm is None: norm = 'density'
     if ax is None: ax = plt.gca()
     if isinstance(x,tuple):
@@ -461,16 +464,16 @@ def plotPDF(x, mode:str=None, log:bool=False, bandwidth:float|str=None, eps:floa
     for i, data in enumerate(x):
         # cast to array and validate
         data = np.asarray(data)
+        data = data[~np.isnan(data)] # always ravels input: loosing a capability of gaussian_kde?
+        #if data.ndim == 2 and data.shape[1] == 1:
+        #    data = data.ravel()
         if data.size < 2:
             grid.append([])
             density.append([])
             continue
-        data = data[~np.isnan(data)] # always ravels input: loosing a capability of gaussian_kde?
-        #if data.ndim == 2 and data.shape[1] == 1:
-        #    data = data.ravel()
 
         match mode:
-            # 1. ereal-valued data using gaussian kernel density estimator
+            # 1. real-valued data using gaussian kernel density estimator
             case 'normal':
                 this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid
                 kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
