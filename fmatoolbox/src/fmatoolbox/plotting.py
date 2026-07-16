@@ -203,14 +203,16 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     return im
 
 
-def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
+def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
     '''
     plot mean +/- confidence intervals of matrix data
 
     arguments:
         x         (n) float, x coordinates
         y         (:,n) float, data to plot, each column corresponds to a value of x
-        ci        callable, used to compute confidence intervals for every column of y, must have signature:  low, high = ci(y)
+        ci        callable | 'nansem', used to compute confidence intervals for every column of `y`, either:
+                  - 'nansem', standard error of the mean (SEM) for each column of `y`, ignoring missing values
+                  - callable, must have signature ``low, high = ci(y)``
         zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
         color     color = None
         mode      str = 'area' | 'error', plot 'ci' either as a shaded area or as error bars
@@ -236,7 +238,11 @@ def semPlot(x, y, ci:Callable=None, zscore:bool|int=None, color:mplt.ColorType=N
     if not (set(['edgecolor','edgecolors','ec','facecolor','facecolors','fc','color']) & aprop.keys()): aprop['color'] = color
     aprop.setdefault('alpha',alpha)
     aprop.setdefault('lw',0)
-    if ci is None:
+
+    if isinstance(ci,str) and ci == 'nansem':
+        ci = lambda x : (np.nanmean(x,axis=0) - np.nanstd(x,axis=0,ddof=1)/np.sqrt(np.sum(~np.isnan(x),axis=0)),
+                         np.nanmean(x,axis=0) + np.nanstd(x,axis=0,ddof=1)/np.sqrt(np.sum(~np.isnan(x),axis=0)))
+    elif ci is None:
         if y.shape[0] == 1:
             ci = lambda x : (x.flatten(), x.flatten())
         elif y.shape[0] < 500:
