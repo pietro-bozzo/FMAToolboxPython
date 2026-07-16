@@ -362,5 +362,7 @@ def subtractIntervals(a,b):
     c[new_even_ind] = a[even_ind]
     # return as interval set
     c = c.reshape((c.shape[0]//2,2))
+    # remove remaining empty intervals
+    c = c[(np.diff(c)!=0).ravel(),:]
 
     return c
