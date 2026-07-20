@@ -12,7 +12,7 @@ from typing import Callable
 
 
 def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None, step:int=None, smooth:float=None, g_range:tuple[int,int]=None):
-    '''
+    """
     estimate the istantaneous rate of a point process from a realization of its time stamps, e.g., the firing rate from spike times
 
     arguments:
@@ -27,7 +27,7 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
 
     output:
         rate        (:,g+1) float, every row is [time stamp, rates for g processes], g is 1 if 'samples' has just one column
-    '''
+    """
 
     # validate input
     samples = np.asarray(samples)
