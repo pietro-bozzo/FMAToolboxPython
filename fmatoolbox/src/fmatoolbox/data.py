@@ -1,5 +1,5 @@
-''' Session data handling functions for FMAToolbox '''
-from typing import Any, Callable
+''' Functions to load data for a recording session '''
+
 import pathlib
 import scipy.io
 import numpy as np
@@ -10,27 +10,32 @@ import re
 import fmatoolbox.exceptions
 import collections
 import concurrent.futures
+import xml.etree.ElementTree
+from typing import Any, Callable
+from os import PathLike
 
 
-def loadSpikeTimes(session:str, output:str='dict', anat_file:str=None, return_elec:bool=False, return_loc:bool=False, reload:bool=False):
-    # load spikes from a session
-    #
-    # arguments:
-    #     session         string, path to session .xml file, spike files must be in session folder
-    #     output          string = None, determines output type, can be:
-    #                       'dict', dictionary of spike times per unit
-    #                       'compact', (:,2) array of [timestamps, unit ids]
-    #                       'full', (:,2) array of [timestamps, electrode groups, clusters]
-    #                       'regions', dict of {region id: dict}, entries are {'spikes': region spikes, 'units': region units}
-    #     anat_file        str = None, DESCRIBE
-    #     return_elec      bool = False, if true, return cluster_loc
-    #     return_loc       bool = False, if true, return cluster_loc
-    #     reload           bool = False, load original files, bypassing Regions/<basename>_spikes.npz backup (for 'output' = 'regions')
-    #
-    # output:
-    #     spikes          (see 'output')
-    #     electrodes      (n) float, optional, electrode id per unit
-    #     cluster_loc     (n) float, optional, index of max spike-amplitude cluster per unit
+def loadSpikeTimes(session:str|PathLike[str], output:str='dict', anat_file:str=None, return_elec:bool=False, return_loc:bool=False, reload:bool=False):
+    """
+    load spikes for a session
+
+    arguments:
+        session        file, path to session .xml file, spike files must be in session folder
+        output         string = None, determines output type, either:
+                        - 'dict', dictionary of spike times per unit
+                        - 'compact', (:,2) array of [timestamps, unit ids]
+                        - 'full', (:,2) array of [timestamps, electrode groups, clusters]
+                        - 'regions', dict of {region id: dict}, entries are {'spikes': region spikes, 'units': region units}
+        anat_file      str = None, DESCRIBE
+        return_elec    bool = False, if true, return cluster_loc
+        return_loc     bool = False, if true, return cluster_loc
+        reload         bool = False, load original files, bypassing Regions/<basename>_spikes.npz backup (for 'output' = 'regions')
+
+    output:
+        spikes         (see 'output')
+        electrodes     (n) float, optional, electrode id per unit
+        cluster_loc    (n) float, optional, index of max spike-amplitude cluster per unit
+    """
 
     file_root = pathlib.Path(session).with_suffix('')
     cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
@@ -50,7 +55,7 @@ def loadSpikeTimes(session:str, output:str='dict', anat_file:str=None, return_el
     return out[:2+return_loc:2-return_elec]
 
 
-def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, return_extra:bool=False, reload:bool=False):
+def loadCellMetricsFile(session:str|PathLike[str], output:str='dict', anat_file:str=None, return_extra:bool=False, reload:bool=False):
 
     file_root = pathlib.Path(session).with_suffix('')
 
@@ -120,10 +125,16 @@ def loadCellMetricsFile(session:str, output:str='dict', anat_file:str=None, retu
     return spikes
 
 
-def loadCluFiles(session:str, rate:float=20000, output:str='dict', anat_file:str=None, reload:bool=False):
+def loadCluFiles(session:str|PathLike[str], rate:float=None, output:str='dict', anat_file:str=None, reload:bool=False):
 
     if output not in ['dict','compact','full','regions']:
         raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
+
+    # load parameters n_channels from .xml
+    if rate is None:
+        tree = xml.etree.ElementTree.parse(file_root.with_suffix(".xml"))
+        root = tree.getroot()
+        rate = float(root.find(".//samplingRate").text)
 
     # load .res and .clu files
     froot = pathlib.Path(session).with_suffix('')
@@ -203,7 +214,7 @@ def loadCluFiles(session:str, rate:float=20000, output:str='dict', anat_file:str
     return spikes
 
 
-def loadAnatomyFile(file_path):
+def loadAnatomyFile(file_path:str|PathLike[str]):
     # load .anat file, whose columns must be [rat, electrode, brain region] (comma separated)
     #
     # arguments:
@@ -212,7 +223,7 @@ def loadAnatomyFile(file_path):
     return np.genfromtxt(file_path,delimiter=",",comments="%",dtype=[("rat",int),("electrode",int),("region","U50")])
 
 
-def loadRegionSpikes(file):
+def loadRegionSpikes(file:str|PathLike[str]):
     spike_npz = np.load(file)
     spikes = {r[3:]: {'spikes': spike_npz[r]} for r in spike_npz.files if r.startswith('sp_')}
     for reg in spikes:
@@ -221,7 +232,7 @@ def loadRegionSpikes(file):
     return spikes
 
 
-def saveRegionSpikes(file,spikes):
+def saveRegionSpikes(file:str|PathLike[str], spikes):
     file = pathlib.Path(file)
     if not file.parent.exists():
         pathlib.Path.mkdir(file.parent)
@@ -231,7 +242,7 @@ def saveRegionSpikes(file,spikes):
     return
 
 
-def loadEventFile(filename: str, compact: bool = False):
+def loadEventFile(filename:str|PathLike[str], compact:bool=False):
     # load events from a .evt file
     #
     # arguments:
@@ -289,8 +300,8 @@ def loadEventFile(filename: str, compact: bool = False):
     return events
 
 
-def loadEvents(session:str, extra:str|list[str]):
-    # load event files from a session
+def loadEvents(session:str|PathLike[str], extra:str|list[str]):
+    # load event files for a session
     #
     # arguments:
     #     session      string, path to session .xml file, event files must be in session folder
@@ -340,7 +351,7 @@ def loadEvents(session:str, extra:str|list[str]):
     return events, cat_names
 
 
-def loadSpikeWaveforms(session: str):
+def loadSpikeWaveforms(session:str|PathLike[str]):
 
     file_root = pathlib.Path(session).with_suffix('')
     data = scipy.io.loadmat(file_root.with_suffix('.cell_metrics.cellinfo.mat'),simplify_cells=True)['cell_metrics']
@@ -351,7 +362,81 @@ def loadSpikeWaveforms(session: str):
     return
 
 
-def loadLFP(session: str):
+def loadWideband(session:str|PathLike[str],dtype=None,channels=None,intervals=None,skip=None):
+    """
+    load wideband data for a session, which is organized in records: chunks of data containing one sample for each channel
+
+    arguments:
+        session      file, path to session .xml file, spike files must be in session folder
+        dtype        type = np.int16
+        channels     (:,) int = None, channels to load, if None, load all channels; counted base 0 as NeuroScope
+        intervals    (:,2) float = None, time intervals to load, if None, load all data
+        skip         int = 0, number of records to skip after each record is read (to subsample data)
+
+    output:
+        data         (records, channels) dtype, data for each channel, each row is a record
+        t            (records,) float, time of each record (not stacked as first column of 'data' to preserve data types)
+    """
+
+    file_root = pathlib.Path(session).with_suffix("")
+    dat_file = file_root.with_suffix(".dat")
+
+    # load parameters n_channels from .xml
+    tree = xml.etree.ElementTree.parse(file_root.with_suffix(".xml"))
+    root = tree.getroot()
+    frequency = float(root.find(".//samplingRate").text)
+    n_channels = int(root.find(".//nChannels").text)
+
+    if dtype is None: dtype = np.int16
+    if skip is None: skip = 0
+    if intervals is None:
+        intervals = [[0,np.inf]]
+    else:
+        intervals = fmatoolbox.general.consolidateIntervals(intervals)
+
+    sample_size = np.dtype(dtype).itemsize
+    file_size = dat_file.stat().st_size
+    results = []
+    t = []
+    with open(dat_file,'rb') as f:
+        for start, stop in intervals:
+
+            # locate 'start' in file
+            record_offset = int(np.floor(start * frequency))
+            byte_offset = record_offset * n_channels * sample_size
+            f.seek(byte_offset)
+
+            # copute number of records to read
+            if np.isinf(stop):
+                remaining_bytes = file_size - byte_offset
+                n_records = remaining_bytes // (n_channels * sample_size)
+            else:
+                n_records = int(np.floor((stop-start) * frequency))
+            max_records = (file_size - byte_offset) // (n_channels * sample_size)
+            n_records = min(n_records,max_records)
+
+            raw = np.fromfile(f,dtype=dtype,count=n_records*n_channels).reshape((-1,n_channels))
+            if raw.size == 0:
+                break
+
+            # select requested channels
+            if channels is not None:
+                raw = raw[:,channels]
+            # apply skipping
+            if skip > 0:
+                raw = raw[::skip+1]
+
+            results.append(raw)
+            t.append(np.linspace(start, start+raw.shape[0]/frequency, raw.shape[0]))
+
+    if len(results):
+        return np.vstack(results), np.concatenate(t)
+    else:
+        if channels is None: channels = np.arange(n_channels)
+        return np.empty((0,len(channels)),dtype=dtype), np.empty(0)
+
+
+def loadLFP(session:str|PathLike[str]):
 
     print('implement!')
 
@@ -365,9 +450,36 @@ def saveMatrix():
 
     return
 
+
+def printXML(session:str|PathLike[str]):
+    """
+    simple utility to print contents of a session's .xml file
+    """
+
+    def print_xml(element,level=0):
+        indent = "  " * level
+        # print tag and attributes
+        print(f"{indent}{element.tag}",end="")
+        if element.attrib:
+            print(f" {element.attrib}",end="")
+        # print text if present
+        text = element.text.strip() if element.text else ""
+        if text:
+            print(f" -> {text}",end="")
+        print()
+        # recurse into children
+        for child in element:
+            print_xml(child,level+1)
+
+    tree = xml.etree.ElementTree.parse(pathlib.Path(session).with_suffix(".xml"))
+    root = tree.getroot()
+    print_xml(root)
+
+    return
+
 # functions to run batch
 
-def readBatchFile(file_path: str):
+def readBatchFile(file_path:str|PathLike[str]):
     # read batch file
     #
     # arguments:
@@ -425,7 +537,7 @@ def _batchWorker(payload):
         return -i-1, e
 
 
-def runBatch(batch_file:str, func:Callable, args:list[list[Any]]=None, rnd_seed:str=None, kwargs:dict|list[dict]=None, ignore_args:bool=False,
+def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=None, rnd_seed:str=None, kwargs:dict|list[dict]=None, ignore_args:bool=False,
              sessions:list[int]=None, parallel:bool|int=False, verbose:bool=True) -> tuple[list, ...]:
     # run a routine on multiple sessions
     #
