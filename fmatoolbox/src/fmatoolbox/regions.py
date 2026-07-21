@@ -7,6 +7,7 @@ import re
 import fmatoolbox.analysis
 import fmatoolbox.data
 import warnings
+import xml.etree.ElementTree
 from collections.abc import Iterable
 
 def _regionDataPath():
@@ -34,8 +35,9 @@ class regions:
         #     reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
         #     anat_file      string = None, DESCRIBE
 
-        self.session = pathlib.Path(session).parent
-        self.basename = pathlib.Path(session).stem
+        session = pathlib.Path(session)
+        self.session = session.parent
+        self.basename = session.stem
         self.rat = self.basename[3:6]
 
         # 1. load events
@@ -109,13 +111,13 @@ class regions:
             self.region = {}
 
         # 4. load spikes and store them per region
+        if anat_file is None:
+            anat_file = next(_regionDataPath().glob('*.anat'), None)
+        else:
+            anat_file = pathlib.Path(anat_file)
+            if not anat_file.exists():
+                anat_file = _regionDataPath() / anat_file
         if load_spikes:
-            if anat_file is None:
-                anat_file = next(_regionDataPath().glob('*.anat'), None)
-            else:
-                anat_file = pathlib.Path(anat_file)
-                if not anat_file.exists():
-                    anat_file = _regionDataPath() / anat_file
             self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=anat_file,reload=reload)
             if ids:
                 self.region = {r: self.region[r] for r in ids}
@@ -125,6 +127,25 @@ class regions:
                 # restrict spikes to session phases
                 for id in self.ids:
                     self.region[id]['spikes'] = fmatoolbox.general.restrict(self.region[id]['spikes'],epoch_intervals)
+
+        # 5. load electrode groups and channels per region
+        try:
+            anat = fmatoolbox.data.loadAnatomyFile(anat_file)
+            anat = anat[anat['rat'] == int(self.rat)] # keep rat of interest, deduced from file name
+            anat_ids = np.unique(anat['region'])
+            tree = xml.etree.ElementTree.parse(session.with_suffix(".xml"))
+            root = tree.getroot()
+            channel_groups = root.find(".//channelGroups").findall("group")
+            channel_groups = [[int(element.text) for element in c.findall(".//channel")] for c in channel_groups]
+            if len(self.region):
+                for id in self.ids:
+                    self.region[id]['channels'] = {int(e): channel_groups[e-1] for e in anat[anat['region'] == id]['electrode']}
+            else:
+                self.ids = anat_ids.tolist()
+                for id in self.ids:
+                    self.region[id] = {'channels': {int(e): channel_groups[e-1] for e in anat[anat['region'] == id]['electrode']} }
+        except FileNotFoundError:
+            pass
 
         return
     
@@ -166,7 +187,8 @@ class regions:
             regs = regs[np.sort(idx)]
 
         # default: all electrode groups
-        all_e_groups = np.concatenate([list(self.region[r]['e_group'].keys()) for r in self.ids])
+        all_e_groups = [list(self.region[r]['e_group'].keys()) for r in self.ids if 'e_group' in self.region[r]]
+        if len(all_e_groups): all_e_groups = np.concatenate(all_e_groups)
         if np.all(e_groups == None):
             if exclusive and np.any(regs != None):
                 e_groups = np.array([None])
@@ -296,17 +318,36 @@ class regions:
 
 
     def electrodes(self,regs=None):
-        # get pooled list of electrode groups for regions
-        #
-        # arguments:
-        #     regs        (:) string = None, electrode of these regions are returned as an array, default is all regions
-        #
-        # output:
-        #     electrodes       (:) int, sorted by value
+        """
+        get pooled list of electrode groups for regions
+        
+        arguments:
+            regs          (:) string = None, electrode of these regions are returned as an array, default is all regions
+        
+        output:
+            electrodes    (:) int, sorted by value
+        """
 
         regs, _, _ = self._checkIDs(regs=regs)
 
         return np.concatenate([list(self.region[r]['e_group'].keys()) for r in regs])
+    
+
+    def channels(self,regs=None):
+        """
+        get pooled list of recording channels for regions
+        
+        arguments:
+            regs        (:) string = None, channels of these regions are returned as an array, default is all regions
+        
+        output:
+            channels    (:) int
+        """
+
+        regs, _, _ = self._checkIDs(regs=regs)
+        values = [list(self.region[r]['channels'].values()) for r in regs]
+        
+        return np.array([x for outer in values for inner in outer for x in inner])
 
 
     def units(self,regs=None,e_groups=None):

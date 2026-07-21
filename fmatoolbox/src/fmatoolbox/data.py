@@ -97,7 +97,7 @@ def loadCellMetricsFile(session:str|PathLike[str], output:str='dict', anat_file:
             if anat_file is None:
                 raise ValueError("'anat_file' must be provided when 'output' = 'regions'")
             anat = loadAnatomyFile(anat_file)
-            anat = anat[anat['rat'] == int(file_root.stem[3:6])]  # keep rat of interest, deduced from file name
+            anat = anat[anat['rat'] == int(file_root.stem[3:6])] # keep rat of interest, deduced from file name
             ids = np.unique(anat['region'])
             spikes = {str(id): {} for id in ids}
             for id in ids:
@@ -362,7 +362,7 @@ def loadSpikeWaveforms(session:str|PathLike[str]):
     return
 
 
-def loadWideband(session:str|PathLike[str],dtype=None,channels=None,intervals=None,skip=None):
+def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals=None, skip=None, cat=None):
     """
     load wideband data for a session, which is organized in records: chunks of data containing one sample for each channel
 
@@ -372,6 +372,7 @@ def loadWideband(session:str|PathLike[str],dtype=None,channels=None,intervals=No
         channels     (:,) int = None, channels to load, if None, load all channels; counted base 0 as NeuroScope
         intervals    (:,2) float = None, time intervals to load, if None, load all data
         skip         int = 0, number of records to skip after each record is read (to subsample data)
+        cat          bool = True, concatenate loaded data into a single array; if False, return a list of arrays for each interval
 
     output:
         data         (records, channels) dtype, data for each channel, each row is a record
@@ -389,10 +390,8 @@ def loadWideband(session:str|PathLike[str],dtype=None,channels=None,intervals=No
 
     if dtype is None: dtype = np.int16
     if skip is None: skip = 0
-    if intervals is None:
-        intervals = [[0,np.inf]]
-    else:
-        intervals = fmatoolbox.general.consolidateIntervals(intervals)
+    if intervals is None: intervals = [[0,np.inf]]
+    intervals = np.array(intervals,ndmin=2)
 
     sample_size = np.dtype(dtype).itemsize
     file_size = dat_file.stat().st_size
@@ -429,11 +428,18 @@ def loadWideband(session:str|PathLike[str],dtype=None,channels=None,intervals=No
             results.append(raw)
             t.append(np.linspace(start, start+raw.shape[0]/frequency, raw.shape[0]))
 
-    if len(results):
-        return np.vstack(results), np.concatenate(t)
-    else:
+    # handle empty output
+    if len(results) == 0:
         if channels is None: channels = np.arange(n_channels)
-        return np.empty((0,len(channels)),dtype=dtype), np.empty(0)
+        results = [np.empty((0,len(channels)),dtype=dtype)]
+        t = [np.empty(0)]
+
+    # concatenate results from intervals
+    if cat:
+        results = np.vstack(results)
+        t = np.concatenate(t)
+
+    return results, t
 
 
 def loadLFP(session:str|PathLike[str]):
