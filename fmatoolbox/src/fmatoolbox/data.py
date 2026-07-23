@@ -113,7 +113,7 @@ def loadCellMetricsFile(session:str|PathLike[str], output:str='dict', anat_file:
                     s = np.concatenate(s)
                     spikes[id]['spikes'] = s[s[:,0].argsort()]
                 else:
-                    spikes[id]['spikes'] = np.array(s,ndmin=2)
+                    spikes[id]['spikes'] = np.empty((0,2))
             # save
             saveRegionSpikes(spike_file,spikes)
 
