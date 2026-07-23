@@ -154,12 +154,9 @@ def restrict(samples, intervals, shift:bool=False, s_ind:bool=False, i_ind:bool=
     #     samples      (p,m) float, restricted samples, i. e., rows of 'samples' whose first element falls into 'intervals'
     #     Is           (n) bool, optional, indicese of original samples which were kept
     #     Ii           (n) bool, optional, indicese of intervals which contain kept samples
-
-    samples = np.asarray(samples)
-    if samples.size == 0:
-        samples = np.array([])
     
     # promote 1d arrays to 2d
+    samples = np.asarray(samples)
     squeeze = samples.ndim == 1
     if squeeze:
         samples = samples.reshape((-1,1))
