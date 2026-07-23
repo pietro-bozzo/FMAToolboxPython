@@ -78,7 +78,7 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
         rate = np.array(rate).T / bin
 
     # make time axis
-    t = bin/step/2 + np.linspace(0,(n_bins-1)*bin,n_bins*step)
+    t = start + bin/step/2 + np.linspace(0,(n_bins-1)*bin,n_bins*step)
 
     # apply smoothing
     if smooth is not None:

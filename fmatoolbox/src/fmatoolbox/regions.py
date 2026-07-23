@@ -417,8 +417,8 @@ class regions:
 
     ## functions to compute quantities ##
 
-    def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, states:Iterable[str]=None, when=None, shift=False,
-                   window=None, step=None, smooth=None, norm=False):
+    def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, states:Iterable[str]=None, when=None, shift:bool=None,
+                   window=None, step:int=None, smooth=None, norm:bool=None):
         '''
         get region firing rate
 
@@ -441,8 +441,10 @@ class regions:
 
         if states is not None and when is not None:
             raise ValueError("'states' and 'when' cannot be specified at the same time")
+        if shift is None: shift = False
         if window is None: window = 0.05
         if step is None: step = 1
+        if norm is None: norm = False
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
 
@@ -491,7 +493,7 @@ class regions:
         return firing_rate
     
 
-    def unitFiringRate(self,regs=None,states=None,when=None,shift=False,window=None,step=None,smooth=None):
+    def unitFiringRate(self, regs=None, states=None, when=None, shift:bool=None, window=None, step:int=None, smooth:bool=None):
         # get units' firing rate
         #
         # arguments:
@@ -509,6 +511,7 @@ class regions:
 
         if states is not None and when is not None:
             raise ValueError("'states' and 'when' cannot be specified at the same time")
+        if shift is None: shift = False
         if window is None: window = 0.05
         if step is None: step = 1
 
@@ -539,7 +542,7 @@ class regions:
         return firing_rate
     
 
-    def avalanches(self,regs=None,states=None,when=None,shift=False,thresh=30,window=0.05,step=1,smooth=None,return_fr=False,norm=False):
+    def avalanches(self, regs=None, states=None, when=None, shift:bool=None, thresh:float=None, window:float=None, step:int=None, smooth:bool=None, norm:bool=None, return_fr:bool=None):
         # compute avalanches per region from population firing rate
         #
         # arguments:
@@ -559,6 +562,9 @@ class regions:
         #     intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
         #     size_t       (m) float, size over time, in which every avalanche is separated by a 0
         #     fr           (:,r+1) float, every row is [time stamp, firing rates for r regions], optional
+
+        if thresh is None: thresh = 30
+        if return_fr is None: return_fr = False
 
         none_state = states is None
         regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
