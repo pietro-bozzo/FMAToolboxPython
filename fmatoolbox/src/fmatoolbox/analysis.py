@@ -82,7 +82,7 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
 
     # apply smoothing
     if smooth is not None:
-        firing_rate = sp.ndimage.gaussian_filter(firing_rate,smooth,axes=0)
+        rate = sp.ndimage.gaussian_filter(rate,smooth,axes=0)
 
     return np.column_stack((t,rate))
 
