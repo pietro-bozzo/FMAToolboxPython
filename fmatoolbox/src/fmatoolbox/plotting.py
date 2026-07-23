@@ -10,6 +10,7 @@ import scipy.stats as spst
 import scipy as sp
 from collections.abc import Iterable
 from typing import Literal, Callable
+import matplotlib as mpl
 
 
 def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
@@ -26,8 +27,11 @@ def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster
 
     lw = 1 if format == 'paper' else 2
     axw = 1.3 if format == 'paper' else 2.1
-    axtick = 9 if format == 'paper' else 14
-    axfont = 10 if format == 'paper' else 18
+    ax_label_fs = 9 if format == 'paper' else 18
+    ax_label_pad = 0.1 if format == 'paper' else 1
+    ax_tick_fs = 8 if format == 'paper' else 14
+    ax_tick_l = 2 if format == 'paper' else 5
+    ax_tick_pad = 1 if format == 'paper' else 2
 
     for ax in axs:
         
@@ -36,9 +40,11 @@ def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster
 
         # adjust thickness and font size
         [ax.spines[spine].set_linewidth(lw) for spine in ['bottom','left','polar'] if spine in ax.spines]
-        ax.tick_params(width=axw,labelsize=axtick)
-        ax.xaxis.label.set_fontsize(axfont)
-        ax.yaxis.label.set_fontsize(axfont)
+        ax.tick_params(width=axw,labelsize=ax_tick_fs,pad=ax_tick_pad,length=ax_tick_l)
+        ax.xaxis.label.set_fontsize(ax_label_fs)
+        ax.yaxis.label.set_fontsize(ax_label_fs)
+        ax.xaxis.labelpad = ax_label_pad
+        ax.yaxis.labelpad = ax_label_pad
 
     return
 
@@ -432,17 +438,17 @@ def plotIntervals(intervals, alpha=0.3, color:mplt.ColorType='gray', ax:mpla.Axe
         ax.axvspan(start,stop,alpha=alpha,color=color)
 
 
-def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, norm=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
     '''
     estimate and plot probability density function (PDF) of data
 
     arguments:
         x            (n,) tuple | array, data to plot
         mode         str = {'normal','log','polar'}, DESCRIBE
-        log          bool = False, plot log-transformed PDF, DEPRECATED
         bandwidth    float | str = 'scott', bandwidth for gaussian kernel
         eps          float = 1e-12, small value used to avoid log(0)
         n_points     int = 50, number of points used to evaluate PDF
+        bins         (:,) float = None, bin edges, if None, bins are linearly spaced between min and max of x
         norm         str = {'density','max'}, normalization mode, 'density' computes PDF, 'max' normalizes its maximum to 1
         color        color = None, line color
         label        str = None, legend label for line
@@ -452,14 +458,14 @@ def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points
     if mode is None: mode = 'normal'
     if bandwidth is None: bandwidth = 0.05 if mode == 'polar' else 'scott'
     if eps is None: eps = 1e-12
-    if n_points is None: n_points = 50
+    if n_points is None and bins is None: n_points = 50
     if norm is None: norm = 'density'
     if ax is None: ax = plt.gca()
     if isinstance(x,tuple):
-        if color is None:
-            color = [None] * len(x)
-        if label is None:
-            label = [None] * len(x)
+        if color is None or isinstance(color,str):
+            color = [color] * len(x)
+        if label is None or isinstance(label,str):
+            label = [label] * len(x)
     else:
         x = (x,)
         color = [color]
@@ -481,7 +487,10 @@ def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points
         match mode:
             # 1. real-valued data using gaussian kernel density estimator
             case 'normal':
-                this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid
+                if n_points is None:
+                    this_grid = bins
+                else:
+                    this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid
                 kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
                 this_density = kde(this_grid)
                 if norm == 'max':
@@ -493,7 +502,10 @@ def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points
                 if data.min() <= 0:
                     raise ValueError('log-transforming data requires positive values')
                 data = np.log(data + eps) # log-transform data
-                this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
+                if n_points is None:
+                    this_grid = bins
+                else:
+                    this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
                 jacobian = np.exp(this_grid) # jacobian term to transform density back to linear
                 kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
                 this_density = kde(this_grid) / jacobian
@@ -504,7 +516,10 @@ def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points
             # 3. circular data using von-Mises kernel density estimator
             case 'polar':
                 data = np.mod(data,2*np.pi)
-                this_grid = np.linspace(0,2*np.pi,n_points) # linear grid in [0,2*pi]
+                if n_points is None:
+                    this_grid = bins
+                else:
+                    this_grid = np.linspace(0,2*np.pi,n_points) # linear grid in [0,2*pi]
                 this_density = np.zeros_like(this_grid)
                 for theta in data:
                     this_density += spst.vonmises.pdf(this_grid-theta,1/bandwidth)
