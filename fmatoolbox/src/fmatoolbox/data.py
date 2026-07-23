@@ -131,13 +131,13 @@ def loadCluFiles(session:str|PathLike[str], rate:float=None, output:str='dict', 
         raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
 
     # load parameters n_channels from .xml
+    froot = pathlib.Path(session).with_suffix('')
     if rate is None:
-        tree = xml.etree.ElementTree.parse(file_root.with_suffix(".xml"))
+        tree = xml.etree.ElementTree.parse(froot.with_suffix(".xml"))
         root = tree.getroot()
         rate = float(root.find(".//samplingRate").text)
 
     # load .res and .clu files
-    froot = pathlib.Path(session).with_suffix('')
     res_files = {int(p.name[len(froot.name)+5:]): p for p in froot.parent.iterdir()
                  if p.is_file() and p.name.startswith(froot.name + '.res.') and p.name[len(froot.name)+5:].isdigit()}
     clu_files = {int(p.name[len(froot.name)+5:]): p for p in froot.parent.iterdir()
