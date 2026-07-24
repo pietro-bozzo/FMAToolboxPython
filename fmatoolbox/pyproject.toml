@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fmatoolbox"
-version = "0.1.2"
+version = "0.1.3"
 description = "Python port of FMAToolbox"
 authors = [{name = "Pietro Bozzo"}]
 readme = "README.md"
