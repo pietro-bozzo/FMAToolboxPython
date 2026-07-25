@@ -426,7 +426,7 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
                 raw = raw[::skip+1]
 
             results.append(raw)
-            t.append(np.linspace(start, start+raw.shape[0]/frequency, raw.shape[0]))
+            t.append(np.linspace(start, start+raw.shape[0]/frequency*(skip+1), raw.shape[0]))
 
     # handle empty output
     if len(results) == 0:
