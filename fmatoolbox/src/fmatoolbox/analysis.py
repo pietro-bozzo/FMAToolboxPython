@@ -8,6 +8,7 @@ import skimage.filters as skif
 import joblib
 import statsmodels.stats.multitest
 import warnings
+from numba import njit
 from typing import Callable
 
 
@@ -261,6 +262,74 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
     m = np.mean(mat,axis=0)
 
     return mat, t, m
+
+
+@njit
+def _ccg_numba(times, proc, nproc, bin_width, lag_start, lag_stop):
+    # ccg: (reference process, target process, lag bin)
+
+    n = len(times)
+    nbins = int(np.ceil((lag_stop - lag_start) / bin_width))
+    inv_bin = nbins / (lag_stop - lag_start) # faster than dividing at every iteration
+
+    ccg = np.zeros((nproc,nproc,nbins),dtype=np.int64)
+    for i in range(n):
+        ti = times[i]
+        pi = proc[i]
+
+        # find first event that can contribute, starting from next event
+        j0 = i + 1
+        while j0 < n and times[j0] - ti < lag_start:
+            j0 += 1
+        j = j0
+
+        while j < n:
+            dt = times[j] - ti
+            if dt >= lag_stop:
+                break
+            pj = proc[j]
+
+            # positive lag contribution
+            if dt >= lag_start:
+                b = int((dt - lag_start) * inv_bin)
+                if 0 <= b < nbins:
+                    ccg[pi,pj,b] += 1
+
+            # negative lag contribution (swap reference and target)
+            if -dt >= lag_start and -dt < lag_stop:
+                b = int((-dt - lag_start) * inv_bin)
+                if 0 <= b < nbins:
+                    ccg[pj,pi,b] += 1
+
+            j += 1
+
+    return ccg
+
+
+def CCG(samples, bin:float, limits:tuple[float,float], fast:bool=None):
+
+    samples = np.asarray(samples)
+    if samples.ndim == 1:
+        times = samples.astype(np.float64)
+        id = np.zeros(len(times),dtype=np.int64)
+    elif samples.shape[1] == 2:
+        times = samples[:,0].astype(np.float64)
+        id = samples[:,1].astype(np.int64)
+    else:
+        raise ValueError("'samples' must be (n,) or (n,2)")
+    nproc = id.max() + 1
+
+    # sort by time
+    if not fast:
+        order = np.argsort(times)
+        times = times[order]
+        id = id[order]
+
+    ccg = _ccg_numba(times, id, nproc, float(bin), float(limits[0]), float(limits[1]))
+    edges = np.linspace(limits[0],limits[1],ccg.shape[2]+1)
+    t = (edges[1:] + edges[:1]) / 2
+
+    return ccg, t
 
 
 def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
