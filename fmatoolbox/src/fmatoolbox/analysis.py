@@ -327,7 +327,7 @@ def CCG(samples, bin:float, limits:tuple[float,float], fast:bool=None):
 
     ccg = _ccg_numba(times, id, nproc, float(bin), float(limits[0]), float(limits[1]))
     edges = np.linspace(limits[0],limits[1],ccg.shape[2]+1)
-    t = (edges[1:] + edges[:1]) / 2
+    t = (edges[1:] + edges[:-1]) / 2
 
     return ccg, t
 
