@@ -1,5 +1,6 @@
 ''' Plotting utilities for publication grade figures '''
 
+import fmatoolbox
 import numpy as np
 import numpy.typing as npt
 import matplotlib.axes as mpla
@@ -9,12 +10,13 @@ import matplotlib.typing as mplt
 import scipy.stats as spst
 import scipy as sp
 from collections.abc import Iterable
+from networkx.algorithms.centrality import flow_matrix
 from typing import Literal, Callable
 import matplotlib as mpl
 
 
 def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
-    # adjust axes properties to emprove figure appearance
+    # adjust axes properties to improve figure appearance
     #
     # arguments:
     #     axs        iterable of matplotlib.axes.Axes
@@ -220,6 +222,7 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
                   - 'nansem', standard error of the mean (SEM) for each column of `y`, ignoring missing values
                   - callable, must have signature ``low, high = ci(y)``
         zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
+        smooth    float = 0,
         color     color = None
         mode      str = 'area' | 'error', plot 'ci' either as a shaded area or as error bars
         alpha     float = 0.5, shaded area transparency value (only for 'area' mode)
@@ -425,17 +428,15 @@ def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None):
     return
 
 
-def plotIntervals(intervals, alpha=0.3, color:mplt.ColorType='gray', ax:mpla.Axes=None):
+def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=None, ax:mpla.Axes=None, **plot_kwargs):
 
-    intervals = np.array(intervals,ndmin=2)
-    if intervals.ndim != 2 or intervals.shape[1] != 2:
-        raise ValueError("'intervals' must have shape (n,2)")
-
+    intervals = fmatoolbox.general.consolidateIntervals(intervals)
     if ax is None:
         ax = plt.gca()
 
-    for start, stop in intervals:
-        ax.axvspan(start,stop,alpha=alpha,color=color)
+    ax.axvspan(intervals[0,0],intervals[0,1],color=color,alpha=alpha,label=label,**plot_kwargs)
+    for start, stop in intervals[1:]:
+        ax.axvspan(start,stop,color=color,alpha=alpha,**plot_kwargs)
 
 
 def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
