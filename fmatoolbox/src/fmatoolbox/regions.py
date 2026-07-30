@@ -103,6 +103,8 @@ class regions:
 
                 self.events[name] = e
 
+        if isinstance(ids,str):
+            ids = [ids]
         if ids:
             self.ids = list(dict.fromkeys(ids))
             self.region = {id : {} for id in ids}
