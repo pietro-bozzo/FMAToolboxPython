@@ -17,6 +17,10 @@ dependencies = [
     "scipy",
     "matplotlib",
     "statsmodels",
+]
+
+[project.optional-dependencies]
+assemblies = [
     "scikit-learn",
     "scikit-image",
 ]

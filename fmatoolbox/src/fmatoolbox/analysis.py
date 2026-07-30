@@ -3,8 +3,6 @@
 import fmatoolbox.general
 import numpy as np
 import scipy as sp
-import sklearn.decomposition as skdc
-import skimage.filters as skif
 import joblib
 import statsmodels.stats.multitest
 import warnings
@@ -234,7 +232,7 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
             valid = counts > 0
             # repeat event indices according to how many samples they match
             event_idx = np.repeat(np.arange(len(events))[valid],counts[valid])
-            sample_idx = np.concatenate([np.arange(l,r) for l, r in zip(left[valid],right[valid])])
+            sample_idx = np.concatenate([np.arange(l,r) for l, r in zip(left[valid],right[valid])]) if np.any(valid) else []
             # build lists of matches
             e_rep = events[event_idx]
             s_sel = samples[sample_idx]
@@ -259,9 +257,77 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
     if squeeze:
         mat = mat.reshape(mat.shape[:2])
 
-    m = np.mean(mat,axis=0)
+    m = np.nanmean(mat,axis=0)
 
     return mat, t, m
+
+
+def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limits=None, **kwargs):
+    # note: first dim of outputs corresponds to lags of samples[0] wrt events
+    # note: not tested for grouped inputs or step != 1
+
+    isscalar = lambda x: x is None or np.isscalar(x)
+
+    # HANDLE lim and bin to ensure same bni size!!
+    if bin is None: bin = 0.05
+    if isscalar(n_bins): n_bins = [n_bins,n_bins]
+    if limits is None:
+        limits = [None,None]
+    else:
+        limits = [limits,limits] if np.isscalar(limits[0]) and np.isscalar(limits[1]) else list(limits)
+    if n_bins[0] is None:
+        if limits[0] is None:
+            n_bins[0] = 101
+            limits[0] = (-bin * n_bins[0] / 2, bin * n_bins[0] / 2)
+        else:
+            n_bins[0] = np.ceil(np.diff(limits[0]) / bin).astype(int)
+            extra = n_bins[0] * bin - limits[0]
+            limits[0][0] -= extra / 2
+            limits[0][1] += extra / 2
+
+
+
+    if limits is None:
+        limits = [(-0.5,0.5), None]
+    else:
+        limits = [limits,limits] if np.isscalar(limits[0]) and np.isscalar(limits[1]) else list(limits)
+    if n_bins is None:
+        n_bins = [101,None]
+    else:
+        n_bins = [n_bins,n_bins] if np.isscalar(n_bins) else list(n_bins)
+    # dummy PETH call to ensure 'bin' is the same for both samples by adjusting limits[1]
+    _, t, _ = PETH([],[],limits=limits[0],n_bins=n_bins[0],bin=bin,step=step,**kwargs)
+    bin = t[1] - t[0]
+    if limits[1] is None:
+        if n_bins[1] is None: limits = (-bin * 50.5, bin * 50.5)
+        else: limits[1] = (-bin * n_bins[1] / 2, bin * n_bins[1] / 2)
+    else:
+        n_bins1 = np.diff(limits[1]) / bin
+
+    rem = np.diff(limits[1]) / bin
+
+
+    kwargs0 = {k: v[0] for k, v in kwargs.items()}
+    kwargs1 = {k: v[1] for k, v in kwargs.items()}
+
+    # PETHs
+    mat0, t0, mean0 = PETH(samples[0], events, limits=limits, n_bins=n_bins, bin=bin, step=step, **kwargs0)
+    mat1, t1, mean1 = PETH(samples[1], events, limits=limits, n_bins=n_bins, bin=bin, step=step, **kwargs1)
+    dt = t0[1] - t0[0]
+    if dt != t1[1] - t1[0]:
+        raise ValueError('time resolution of the two PETHs must coincide')
+
+    # observed co-occurrence between 'samples0' and 'samples1' at every time bin
+    joint = (mat0.T @ mat1) / len(events)
+    # expected co-occurrence if the signals were independent: product
+    null = np.outer(mean0, mean1)
+    # convert to Hz
+    joint = np.sqrt(joint) / dt
+    null = np.sqrt(null) / dt
+    # difference(i,j) = sqrt[ mean_e( mat0(e,i) * mat1(e,j) ) ] - sqrt[ mean0(i) * mean1(j) ]
+    difference = joint - null
+
+    return joint, null, difference, t0, t1
 
 
 @njit
@@ -372,6 +438,12 @@ def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
 
 def cellAssembliesICA(spikes, window:float=None, when=None, drop_mix:bool=False):
     # detect assemblies from spike trains with PCA + ICA
+
+    try:
+        import sklearn.decomposition as skdc
+        import skimage.filters as skif
+    except ImportError as e:
+        raise ImportError('cellAssembliesICA requires scikit-learn, did you do: pip install "fmatoolbox[assemblies]" ?') from e
 
     if window is None: window = 0.025
 
