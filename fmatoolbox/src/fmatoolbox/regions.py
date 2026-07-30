@@ -99,7 +99,7 @@ class regions:
                 # restrict to session epochs
                 if phase_names:
                     _, valid = fmatoolbox.general.restrict(e['intervals'],epoch_intervals,s_ind=True)
-                    e = {k: v[valid] for k, v in e.items()}
+                    e = {k: v[valid] for k, v in e.items() if len(v) == len(valid)}
 
                 self.events[name] = e
 
