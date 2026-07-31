@@ -86,98 +86,31 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
     return np.column_stack((t,rate))
 
 
-def firingRate(spikes, start:float=None, stop:float=None, bin_size:float=None, step:int=None, smooth:float=None, u_range:tuple[int,int]=None):
-    # estimate istantaneous firing rate from spike times
-    #
-    # arguments:
-    #     spikes         (n,:) float, every row is either [spike time] (s) or [spike time, unit id]
-    #     start          float = min(spike_times) s, time to start count at
-    #     stop           float = max(spike_times) s, time to stop count at
-    #     bin_size       float = 0.05 s, time bin to count spikes
-    #     step           int = 1, firing rate is computed in windows of length 'bin_size' and overlap 'bin_size' / 'step', default is no overlap
-    #     smooth         float = None, gaussian kernel std for smoothing over time
-    #     u_range        (2) int, range of units to consider in computation, default is [min(spikes[:,1]), max(spikes[:,1])]
-    #                    (boundaries included, only for 2-columns 'spikes')
-    #
-    # output:
-    #     firing_rate    (:,m+1) float, every row is [time stamp, firing rates for m units], m is 1 if spikes has just one column
-
-    warnings.warn("firingRate is deprecated, use istantaneousRate instead!", DeprecationWarning)
-
-    # validate input
-    spikes = np.asarray(spikes)
-    if bin_size is None: bin_size = 0.05
-    if step is None: step = 1
-    if step % 1 or step == 0:
-        raise ValueError("'step' must be a non-zero integer")
-    
-    units = []
-    if spikes.ndim == 1:
-        times = spikes
-    elif spikes.shape[1] == 1:
-        times = spikes.reshape(-1)
-    else:
-        times = spikes[:,0]
-        units = spikes[:,1]
-        if u_range is None:
-            u_range = np.unique(units).astype(int)[[0,-1]]
-        else:
-            u_range = np.array(u_range,dtype=int)
-    
-    # build time bins, overlapping if requested
-    if start is None:
-        start = times.min()
-    if stop is None:
-        stop = times.max()
-    time_bins = [np.arange(start,stop+bin_size,bin_size) + i*bin_size/step for i in range(step)]
-    
-    if len(units) == 0:
-        # compute firing rate once
-        firing_rate = [np.histogram(times,bins=tb)[0] for tb in time_bins]
-        # flatten and convert to Hz
-        firing_rate = np.array(firing_rate).reshape((-1,1),order='F') / bin_size
-    else:
-        # compute firing rate once per unit and stack into a matrix
-        firing_rate = []
-        for u in range(u_range[0],u_range[-1]+1):
-            fr = [np.histogram(times[units==u],bins=tb)[0] for tb in time_bins]
-            firing_rate.append(np.array(fr).flatten('F'))
-        firing_rate = np.array(firing_rate).T / bin_size
-
-    # center times into time bins
-    time_bins = [(tb[:-1] + tb[1:]) / 2 for tb in time_bins]
-    time_bins = np.array(time_bins).reshape((-1,1),order='F')
-
-    # apply smoothing
-    if smooth is not None:
-        firing_rate = sp.ndimage.gaussian_filter(firing_rate,smooth,axes=0)
-
-    return np.concatenate((time_bins,firing_rate),1)
-
-
 def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple[float,float]=None, n_bins:int=None, bin:float=None, step:int=None, fast:bool=False):
-    # compute peri-event time histogram of a signal relative to synchronizing events
-    #
-    # arguments:
-    #     samples    float, either:
-    #                 - (n) array of time stamps (s), describing a point process
-    #                 - (n,:) array, where each row is [time stamp (s), value1, ...], describing one or more continous signals
-    #     events     (m) float, synchronizing events' times, their order is maintained in the output 'mat'
-    #     groups     (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
-    #     g_range    (2) int = [0,max(groups)], min and max group id
-    #     groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
-    #     limits     (2) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
-    #     n_bins     float = 101, number of time bins around event times
-    #     bin        float = None (s), bin size, can be given instead of 'n_bins', which will be deduced from 'bin' and 'limits'
-    #     step       int = 1, only for point-process 'samples', for values higher than 1, time bins inside a window will overlap, yielding:
-    #                 - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
-    #                 - time resolution of bin_size / step
-    #     fast       bool = False, if True, 'samples' must be time sorted to save computation time (only for point process 'samples')
-    #
-    # output:
-    #     mat        (m,n_bins) float, every row corresponds to samples centered on an event
-    #     t          (n_bins) float, times (s)
-    #     m          (n_bins) float, average samples across events
+    ''''
+    compute peri-event time histogram of a signal relative to synchronizing events
+
+    arguments:
+        samples    float, either:
+                    - (n) array of time stamps (s), describing a point process
+                    - (n,:) array, where each row is [time stamp (s), value1, ...], describing one or more continous signals
+        events     (m) float, synchronizing events' times, their order is maintained in the output 'mat'
+        groups     (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
+        g_range    (2) int = [0,max(groups)], min and max group id
+        groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
+        limits     (2) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
+        n_bins     float = 101, number of time bins around event times
+        bin        float = None (s), bin size, can be given instead of 'n_bins', which will be deduced from 'bin' and 'limits'
+        step       int = 1, only for point-process 'samples', for values higher than 1, time bins inside a window will overlap, yielding:
+                    - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
+                    - time resolution of bin_size / step
+        fast       bool = False, if True, 'samples' must be time sorted to save computation time (only for point process 'samples')
+
+    output:
+        mat        (m,n_bins) float, every row corresponds to samples centered on an event
+        t          (n_bins) float, times (s)
+        m          (n_bins) float, average samples across events
+    '''
 
     # default values
     samples = np.array(samples,ndmin=1)
@@ -262,59 +195,70 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
     return mat, t, m
 
 
-def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limits=None, **kwargs):
-    # note: first dim of outputs corresponds to lags of samples[0] wrt events
-    # note: not tested for grouped inputs or step != 1
+def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limits=None, return_peths=None):
+    '''
+    compute joint peri-event time histogram of two signals A and B relative to synchronizing events, i.e., the co-occurrence rate (Hz)
+    for different time-lag pairs applied to A and B
 
+    arguments:
+        samples       (2,) tuple, whose elements can be either:
+                      - (n) float of time stamps (s), describing a point process
+                      - (n,:) float, where each row is [time stamp (s), value1, ...], describing one or more continous signals
+        events        (m) float, synchronizing events' times, their order is maintained in the output 'mat' /!\
+        bin           float = 0.05 (s), bin size to compute PETHs
+        n_bins        int | (2,) int = 101, number of time bins around event times, either one for both PETHS or two values
+        limits        (2,) float | (2,2) float = None, can be given instead of 'n_bins', which will be deduced from 'bin' and 'limits', and
+                      defines a [start, stop] window (in s) around events, divided into time bins of size 'bin' to compute PETHs; can be a
+                      single tuple for both PETHS or a tuple of tuples
+        step          int = 1, only for point-process 'samples', for values higher than 1, time bins inside each window will overlap, yielding:
+                       - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
+                       - time resolution of bin_size / step
+        ARGS YET TO TEST
+        groups        (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
+        g_range       (2) int = [0,max(groups)], min and max group id
+        groups        (:) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
+        fast          bool = False, if True, 'samples' must be time sorted to save computation time (only for point process 'samples')
+
+    output:
+        joint         (n_bins0,n_bins1) float, lagged co-occurrency rate (Hz), dimensions correspond to time lags w.r.t. 'events' for
+                      A and B, respectively
+        null          (n_bins0,n_bins1) float, null model for 'joint' in case A and B occurr independently, conditioned on 'events';
+                      i.e., their conditioned co-occurrence probability is the product of their average event PETHs
+        difference    (n_bins0,n_bins1) float, 'joint' - 'null', co-occurrence rate (Hz) unexplained by the null model, values far from 0 suggest
+                      that conditioning on 'events' is not sufficient to explain the co-occurrence of the two signals
+        '''
+    # note: returned PETHs are average counts for now
+
+    # ensure PETHs are produced with the same bin size
     isscalar = lambda x: x is None or np.isscalar(x)
-
-    # HANDLE lim and bin to ensure same bni size!!
     if bin is None: bin = 0.05
-    if isscalar(n_bins): n_bins = [n_bins,n_bins]
+    if isscalar(n_bins):
+        n_bins = [n_bins,n_bins]
+    else:
+        n_bins = list(n_bins)
     if limits is None:
         limits = [None,None]
     else:
-        limits = [limits,limits] if np.isscalar(limits[0]) and np.isscalar(limits[1]) else list(limits)
-    if n_bins[0] is None:
-        if limits[0] is None:
-            n_bins[0] = 101
-            limits[0] = (-bin * n_bins[0] / 2, bin * n_bins[0] / 2)
+        limits = [list(limits),list(limits)] if np.isscalar(limits[0]) and np.isscalar(limits[1]) else [l if isscalar(l) else list(l) for l in limits]
+    for i in [0,1]:
+        if n_bins[i] is None:
+            if limits[i] is None:
+                n_bins[i] = 101
+                limits[i] = (-bin * n_bins[i] / 2, bin * n_bins[i] / 2)
+            else:
+                window = np.diff(limits[i]).item()
+                n_bins[i] = np.ceil(window / bin).astype(int)
+                extra = n_bins[i] * bin - window
+                limits[i][0] -= extra / 2
+                limits[i][1] += extra / 2
         else:
-            n_bins[0] = np.ceil(np.diff(limits[0]) / bin).astype(int)
-            extra = n_bins[0] * bin - limits[0]
-            limits[0][0] -= extra / 2
-            limits[0][1] += extra / 2
-
-
-
-    if limits is None:
-        limits = [(-0.5,0.5), None]
-    else:
-        limits = [limits,limits] if np.isscalar(limits[0]) and np.isscalar(limits[1]) else list(limits)
-    if n_bins is None:
-        n_bins = [101,None]
-    else:
-        n_bins = [n_bins,n_bins] if np.isscalar(n_bins) else list(n_bins)
-    # dummy PETH call to ensure 'bin' is the same for both samples by adjusting limits[1]
-    _, t, _ = PETH([],[],limits=limits[0],n_bins=n_bins[0],bin=bin,step=step,**kwargs)
-    bin = t[1] - t[0]
-    if limits[1] is None:
-        if n_bins[1] is None: limits = (-bin * 50.5, bin * 50.5)
-        else: limits[1] = (-bin * n_bins[1] / 2, bin * n_bins[1] / 2)
-    else:
-        n_bins1 = np.diff(limits[1]) / bin
-
-    rem = np.diff(limits[1]) / bin
-
-
-    kwargs0 = {k: v[0] for k, v in kwargs.items()}
-    kwargs1 = {k: v[1] for k, v in kwargs.items()}
+            limits[i] = (-bin * n_bins[i] / 2, bin * n_bins[i] / 2)
 
     # PETHs
-    mat0, t0, mean0 = PETH(samples[0], events, limits=limits, n_bins=n_bins, bin=bin, step=step, **kwargs0)
-    mat1, t1, mean1 = PETH(samples[1], events, limits=limits, n_bins=n_bins, bin=bin, step=step, **kwargs1)
+    mat0, t0, mean0 = PETH(samples[0], events, limits=limits[0], n_bins=n_bins[0], bin=bin, step=step)
+    mat1, t1, mean1 = PETH(samples[1], events, limits=limits[1], n_bins=n_bins[1], bin=bin, step=step)
     dt = t0[1] - t0[0]
-    if dt != t1[1] - t1[0]:
+    if not np.isclose(dt, t1[1]-t1[0]):
         raise ValueError('time resolution of the two PETHs must coincide')
 
     # observed co-occurrence between 'samples0' and 'samples1' at every time bin
@@ -327,6 +271,8 @@ def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limit
     # difference(i,j) = sqrt[ mean_e( mat0(e,i) * mat1(e,j) ) ] - sqrt[ mean0(i) * mean1(j) ]
     difference = joint - null
 
+    if return_peths:
+        return joint, null, difference, t0, t1, mean0, mean1
     return joint, null, difference, t0, t1
 
 
