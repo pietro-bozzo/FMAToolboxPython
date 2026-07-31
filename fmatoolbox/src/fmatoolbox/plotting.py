@@ -149,8 +149,8 @@ def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, a
     return
 
 
-def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, sortby:npt.NDArray[np.floating]|Callable|str=None, sortax:int=0,
-                 xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=3/4, ax:mpla.Axes=None):
+def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, sortby:npt.NDArray[np.floating]|Callable|str=None, sortax:int=None,
+                 xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=None, bar:str=None, ax:mpla.Axes=None):
     '''
     plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
@@ -167,6 +167,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         xzoom, yzoom    float = None, optional horizontal / vertical resampling factor passed to ``scipy.ndimage.zoom`` (after sorting)
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
         aspect          float = 3/4, image aspect ratio
+        bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     '''
 
@@ -178,6 +179,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
             zscore = None
         data = spst.zscore(data,axis=zscore,nan_policy='omit')
 
+    if sortax is None: sortax = 0
     if sortby is not None:
         if isinstance(sortby,str) and sortby == 'peak':
             sortby = lambda x : np.argsort(np.argmax(x,1-sortax))
@@ -205,8 +207,11 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     if ax is None:
         ax = plt.gca()
 
+    if aspect is None: aspect = 3 / 4
     ax.set_aspect(aspect)
     im = ax.imshow(data,aspect='auto',vmin=vmin,vmax=vmax,origin='lower',extent=[x[0]-dx,x[-1]+dx,y[0]-dy,y[-1]+dy])
+    if bar is not None:
+        plt.colorbar(im,label=bar,ax=ax)
 
     return im
 
