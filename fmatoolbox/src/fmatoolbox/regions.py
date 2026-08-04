@@ -433,7 +433,7 @@ class regions:
             window      float = 0.05, window size to count spikes
             step        int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
                         default is no overlap
-            smooth      float = None, gaussian kernel std for smoothing over time
+            smooth      float = None, gaussian kernel std to smooth rate over time
             norm        bool = False, normalize by neuron number per region
 
         output:
@@ -506,7 +506,7 @@ class regions:
         #     window    float = 0.05 s, window size to count spikes
         #     step      int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
         #               default is no overlap
-        #     smooth    float = None, gaussian kernel std for smoothing over time
+        #     smooth    float = None, gaussian kernel std to smooth rate over time
         #
         # output:
         #     rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
@@ -556,7 +556,7 @@ class regions:
         #     window       float = 0.05 s, window size to count spikes
         #     step         float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
         #                  default is no overlap
-        #     smooth       float = None, gaussian kernel std for smoothing over time
+        #     smooth       float = None, gaussian kernel std to smooth rate over time before finding avalanches
         #     norm         bool = False, normalize by neuron number per region
         #
         # output:
