@@ -362,8 +362,8 @@ def loadSpikeWaveforms(session:str|PathLike[str]):
     return
 
 
-def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals=None, skip=None, cat=None):
-    """
+def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals=None, skip:int=None, cat:bool=None, trim:bool=None):
+    '''
     load wideband data for a session, which is organized in records: chunks of data containing one sample for each channel
 
     arguments:
@@ -373,11 +373,14 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
         intervals    (:,2) float = None, time intervals to load, if None, load all data
         skip         int = 0, number of records to skip after each record is read (to subsample data)
         cat          bool = True, concatenate loaded data into a single array; if False, return a list of arrays for each interval
+        trim         bool = False, trim each loaded chunk of data so that they all have the same number of time points (useful if
+                     'intervals' are of the same length)
 
     output:
-        data         (records, channels) dtype, data for each channel, each row is a record
-        t            (records,) float, time of each record (not stacked as first column of 'data' to preserve data types)
-    """
+        data         (records, channels) dtype, data for each channel, each row is a record; list of arrays if 'cat' is False
+        t            (records,) float, time of each record; list of arrays if 'cat' is False (contrary to FMAT standard 't' returned
+                     separately from 'data' to preserve different data types)
+    '''
 
     file_root = pathlib.Path(session).with_suffix("")
     dat_file = file_root.with_suffix(".dat")
@@ -389,15 +392,17 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
     n_channels = int(root.find(".//nChannels").text)
 
     if dtype is None: dtype = np.int16
-    if skip is None: skip = 0
+    if channels is not None: channels = np.array(channels, ndmin=1)
     if intervals is None: intervals = [[0,np.inf]]
     intervals = np.array(intervals,ndmin=2)
-    if channels is not None: channels = np.array(channels,ndmin=1)
+    if skip is None: skip = 0
+    if cat is None: cat = True
 
     sample_size = np.dtype(dtype).itemsize
     file_size = dat_file.stat().st_size
     results = []
     t = []
+    min_len = np.inf
     with open(dat_file,'rb') as f:
         for start, stop in intervals:
 
@@ -428,12 +433,17 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
 
             results.append(raw)
             t.append(np.linspace(start, start+raw.shape[0]/frequency*(skip+1), raw.shape[0]))
+            min_len = min(min_len,raw.shape[0])
 
     # handle empty output
     if len(results) == 0:
         if channels is None: channels = np.arange(n_channels)
         results = [np.empty((0,len(channels)),dtype=dtype)]
         t = [np.empty(0)]
+
+    if trim:
+        results = [r[:min_len,:] for r in results]
+        t = [_t[:min_len] for _t in t]
 
     # concatenate results from intervals
     if cat:
