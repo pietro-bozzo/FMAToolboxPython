@@ -392,6 +392,7 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
     if skip is None: skip = 0
     if intervals is None: intervals = [[0,np.inf]]
     intervals = np.array(intervals,ndmin=2)
+    if channels is not None: channels = np.array(channels,ndmin=1)
 
     sample_size = np.dtype(dtype).itemsize
     file_size = dat_file.stat().st_size
