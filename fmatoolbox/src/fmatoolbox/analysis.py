@@ -86,8 +86,8 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
     return np.column_stack((t,rate))
 
 
-def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple[float,float]=None, n_bins:int=None, bin:float=None, step:int=None, fast:bool=False):
-    ''''
+def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple[float,float]=None, n_bins:int=None, bin:float=None, step:int=None, smooth:float=None, fast:bool=False):
+    '''
     compute peri-event time histogram of a signal relative to synchronizing events
 
     arguments:
@@ -104,12 +104,13 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
         step       int = 1, only for point-process 'samples', for values higher than 1, time bins inside a window will overlap, yielding:
                     - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
                     - time resolution of bin_size / step
+        smooth     float = None, gaussian kernel std to smooth mean output 'm' over time, has no effect on 'mat'
         fast       bool = False, if True, 'samples' must be time sorted to save computation time (only for point process 'samples')
 
     output:
         mat        (m,n_bins) float, every row corresponds to samples centered on an event
         t          (n_bins) float, times (s)
-        m          (n_bins) float, average samples across events
+        m          (n_bins) float, average of 'samples' across events
     '''
 
     # default values
@@ -191,11 +192,13 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
         mat = mat.reshape(mat.shape[:2])
 
     m = np.nanmean(mat,axis=0)
+    if smooth is not None:
+        m = sp.ndimage.gaussian_filter(m,smooth,axes=0)
 
     return mat, t, m
 
 
-def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limits=None, return_peths=None):
+def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limits=None, return_peths:bool=None, smooth:float=None):
     '''
     compute joint peri-event time histogram of two signals A and B relative to synchronizing events, i.e., the co-occurrence rate (Hz)
     for different time-lag pairs applied to A and B
@@ -213,6 +216,7 @@ def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limit
         step          int = 1, only for point-process 'samples', for values higher than 1, time bins inside each window will overlap, yielding:
                        - bin_size of (limit[1]-limit[0]) / n_bins, unchanged
                        - time resolution of bin_size / step
+        smooth        float = None, gaussian kernel std to smooth mean output 'peth' over time, has no effect on other outputs
         ARGS YET TO TEST
         groups        (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
         g_range       (2) int = [0,max(groups)], min and max group id
@@ -227,11 +231,11 @@ def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limit
         difference    (n_bins0,n_bins1) float, 'joint' - 'null', co-occurrence rate (Hz) unexplained by the null model, values far from 0 suggest
                       that conditioning on 'events' is not sufficient to explain the co-occurrence of the two signals
         '''
-    # note: returned PETHs are average counts for now
 
-    # ensure PETHs are produced with the same bin size
+    # 1. ensure PETHs are produced with the same bin size
     isscalar = lambda x: x is None or np.isscalar(x)
     if bin is None: bin = 0.05
+    # duplicate single-peth inputs for two peths
     if isscalar(n_bins):
         n_bins = [n_bins,n_bins]
     else:
@@ -240,6 +244,7 @@ def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limit
         limits = [None,None]
     else:
         limits = [list(limits),list(limits)] if np.isscalar(limits[0]) and np.isscalar(limits[1]) else [l if isscalar(l) else list(l) for l in limits]
+    # deduce 'n_bins' or 'limits'
     for i in [0,1]:
         if n_bins[i] is None:
             if limits[i] is None:
@@ -254,9 +259,9 @@ def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limit
         else:
             limits[i] = (-bin * n_bins[i] / 2, bin * n_bins[i] / 2)
 
-    # PETHs
-    mat0, t0, mean0 = PETH(samples[0], events, limits=limits[0], n_bins=n_bins[0], bin=bin, step=step)
-    mat1, t1, mean1 = PETH(samples[1], events, limits=limits[1], n_bins=n_bins[1], bin=bin, step=step)
+    # 2. PETHs
+    mat0, t0, mean0 = PETH(samples[0],events,limits=limits[0],n_bins=n_bins[0],bin=bin,step=step)
+    mat1, t1, mean1 = PETH(samples[1],events,limits=limits[1],n_bins=n_bins[1],bin=bin,step=step)
     dt = t0[1] - t0[0]
     if not np.isclose(dt, t1[1]-t1[0]):
         raise ValueError('time resolution of the two PETHs must coincide')
@@ -272,6 +277,12 @@ def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limit
     difference = joint - null
 
     if return_peths:
+        if smooth is not None:
+            # recompute with smoothing
+            _, _, mean0 = PETH(samples[0],events,limits=limits[0],n_bins=n_bins[0],bin=bin,step=step,smooth=smooth)
+            _, _, mean1 = PETH(samples[1],events,limits=limits[1],n_bins=n_bins[1],bin=bin,step=step,smooth=smooth)
+        mean0 /= dt
+        mean1 /= dt
         return joint, null, difference, t0, t1, mean0, mean1
     return joint, null, difference, t0, t1
 
