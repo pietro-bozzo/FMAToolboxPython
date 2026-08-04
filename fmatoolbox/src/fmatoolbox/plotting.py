@@ -227,7 +227,7 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
                   - 'nansem', standard error of the mean (SEM) for each column of `y`, ignoring missing values
                   - callable, must have signature ``low, high = ci(y)``
         zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
-        smooth    float = 0,
+        smooth    float = None, gaussian kernel std for smoothing over time, NOT IMPLEMENTED
         color     color = None
         mode      str = 'area' | 'error', plot 'ci' either as a shaded area or as error bars
         alpha     float = 0.5, shaded area transparency value (only for 'area' mode)
