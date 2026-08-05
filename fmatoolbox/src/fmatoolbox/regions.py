@@ -354,7 +354,7 @@ class regions:
 
     def units(self,regs=None,e_groups=None,return_reg=None):
         '''
-        get pooled list of units for regions
+        get pooled list of units for a list of regions
 
         arguments:
             regs          (:,) string = None, regions to fetch units for, default is all regions
@@ -394,23 +394,21 @@ class regions:
         return units
 
 
-    def spikes(self,regs=None,e_groups=None,state=None,when=None,shift=False):
-        # get pooled spikes for regions
-        #
-        # arguments:
-        #     regs        (:) string = None, spikes of all these regions are returned as a time-sorted array
-        #     e_groups    (:) int = None, units of all these electrode groups (starting at 1) are returned as a time-sorted array
-        #     state       string = None, behavioral to restrict spikes to
-        #     when        DESCRIBE, same input as eventIntervals
-        #     shift       bool = False, shift epochs together in time after filtering by state
-        #
-        # output:
-        #     spikes    (:) float, each row is [spike time (s), unit id]
+    def spikes(self,regs=None,e_groups=None,when=None,shift=False):
+        '''
+        get pooled spikes samples for a list regions
 
-        if state is not None and when is not None:
-            raise ValueError("'state' and 'when' cannot be specified at the same time")
+        arguments:
+            regs        (:,) string = None, regions to fetch spikes for, default is all regions
+            e_groups    (:,) int = None, electrode groups (starting at 1) to fetch spikes for, default is none
+            when        DESCRIBE, same input as eventIntervals
+            shift       bool = False, shift epochs together in time after filtering by 'when'
 
-        regs, e_groups, state = self._checkIDs(regs=regs,e_groups=e_groups,states=state,fuse=True)
+        output:
+            spikes      (:,2) float, each row is [spike time (s), unit id], time sorted
+        '''
+
+        regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups,fuse=True)
 
         spikes = []
         e_group_units = self.units(e_groups=e_groups)
@@ -424,15 +422,8 @@ class regions:
         spikes = np.concatenate(spikes)
         spikes = spikes[spikes[:,0].argsort()] # sort by time
 
-        if np.any(state != 'all'):
-            spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals([state]),shift=shift)
         if when is not None:
-            try:
-                # 1. 'when' is a list of time intervals
-                spikes = fmatoolbox.general.restrict(spikes,when,shift=shift)
-            except:
-                # 2. 'when' contains event names
-                spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals(when),shift=shift)
+            spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals(when),shift=shift)
 
         return spikes
     
