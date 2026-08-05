@@ -352,26 +352,46 @@ class regions:
         return np.array([x for outer in values for inner in outer for x in inner])
 
 
-    def units(self,regs=None,e_groups=None):
-        # get pooled list of units for regions
-        #
-        # arguments:
-        #     regs        (:) string = None, units of all these regions are returned as an array, default is all regions
-        #     e_groups    (:) int = None, units of all these electrode groups (starting at 1) are returned as an array
-        #
-        # output:
-        #     units       (:) int, sorted by value
+    def units(self,regs=None,e_groups=None,return_reg=None):
+        '''
+        get pooled list of units for regions
+
+        arguments:
+            regs          (:,) string = None, regions to fetch units for, default is all regions
+            e_groups      (:,) int = None, electrode groups (starting at 1) to fetch units for, default is none
+            return_reg    bool = False, if True, also return list of region per unit
+
+        output:
+            units         (n,) int, unit ids belonging to any of 'regs' or 'e_groups', sorted by value
+            reg           (n,) string, region id of each element of 'units' (optional)
+        '''
 
         regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups)
 
         units = []
+        unit_reg = []
         for r in self.ids:
             if r in regs:
-                units.extend(list(self.region[r]['e_group'].values()))
-            elif np.any(e_groups != [None]):
-                [units.append(u) for g, u in self.region[r]['e_group'].items() if g in e_groups]
+                u = list(self.region[r]['e_group'].values())
+                units.extend(u)
+                u_r = [np.full(len(_u),r) for _u in u]
+                unit_reg.extend(u_r)
 
-        return np.sort(np.concatenate(units)) if len(units) else units
+            elif np.any(e_groups != [None]):
+                for g, u in self.region[r]['e_group'].items():
+                    if g in e_groups:
+                        units.append(u)
+                        unit_reg.append(np.full(len(u),r))
+
+        units = np.concatenate(units) if len(units) else np.array(units)
+        order = np.argsort(units)
+        units = units[order]
+
+        if return_reg:
+            unit_reg = np.concatenate(unit_reg) if len(unit_reg) else np.array(unit_reg)
+            unit_reg = unit_reg[order]
+            return units, unit_reg
+        return units
 
 
     def spikes(self,regs=None,e_groups=None,state=None,when=None,shift=False):
