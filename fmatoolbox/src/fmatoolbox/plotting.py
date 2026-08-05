@@ -149,8 +149,8 @@ def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, a
     return
 
 
-def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, sortby:npt.NDArray[np.floating]|Callable|str=None, sortax:int=None,
-                 xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=None, bar:str=None, ax:mpla.Axes=None):
+def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:npt.NDArray[np.floating]|Callable|str=None,
+                 sortax:int=None, xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=None, bar:str=None, ax:mpla.Axes=None):
     '''
     plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
@@ -159,6 +159,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         vmin, vmax      float = None, lower / upper bound of the colormap, if None uses autoscale
         zscore          int | 'all' = None, if int, specifies axis along which to z-score `data`; if 'all', compute z-score over whole array,
                         if None, no normalization is applied
+        omitnan         int = None, axis along which to drop slices of `data` if they contain only nans
         sortby          (:,) int | callable | 'peak' = None, optional method used to sort `data` along `sortax` (after optional z-scoring), either:
                         - 'peak', sort rows or columns by the index of their maximum value along the opposite axis
                         - (:,) int, array of indeces to sort data along `sortax`
@@ -171,7 +172,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     '''
 
-    # store original shape in case data neds to be zoomed
+    # store original shape in case data needs to be zoomed
     n_y, n_x = data.shape
 
     if zscore is not None:
@@ -179,10 +180,15 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
             zscore = None
         data = spst.zscore(data,axis=zscore,nan_policy='omit')
 
+    if omitnan is not None:
+        keep = ~np.all(np.isnan(data),axis=omitnan)
+        data = data[:,keep] if omitnan == 0 else data[keep,:]
+
     if sortax is None: sortax = 0
     if sortby is not None:
         if isinstance(sortby,str) and sortby == 'peak':
             sortby = lambda x : np.argsort(np.argmax(x,1-sortax))
+            sort_idx = sortby(data)
         elif callable(sortby):
             sort_idx = sortby(data)
         else:
