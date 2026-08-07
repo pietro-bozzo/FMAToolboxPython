@@ -410,7 +410,7 @@ class regions:
             spikes      (:,2) float, each row is [spike time (s), unit id], time sorted
         '''
 
-        regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups,fuse=True)
+        regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups)
 
         spikes = []
         e_group_units = self.units(e_groups=e_groups)
@@ -433,8 +433,8 @@ class regions:
     ## functions to compute quantities ##
 
 
-    def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, states:Iterable[str]=None, when=None, shift:bool=None,
-                   window:float=None, step:int=None, smooth:float=None, norm:bool=None):
+    def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, when=None, shift:bool=None, window:float=None, step:int=None,
+                   smooth:float=None, norm:bool=None):
         """
         get population firing rate per region
 
@@ -454,14 +454,10 @@ class regions:
                         input order of regions and electrodes is preserved
         """
 
-        if shift is None: shift = False
-        if window is None: window = 0.05
-        if step is None: step = 1
-        if norm is None: norm = False
-
-        regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
+        regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups)
         do_restrict = when is not None
         when = self.eventIntervals(when)
+        do_restrict = do_restrict and len(when) > 1
 
         firing_rate = []
         if np.any(regs != None):
@@ -476,6 +472,7 @@ class regions:
         time = fr[:,0]
         firing_rate = np.column_stack((time,firing_rate))
 
+        # restrict to 'when'
         if do_restrict:
             firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
 
@@ -487,51 +484,38 @@ class regions:
         return firing_rate
     
 
-    def unitFiringRate(self, regs=None, states=None, when=None, shift:bool=None, window=None, step:int=None, smooth:bool=None):
-        # get units' firing rate
-        #
-        # arguments:
-        #     regs      (:) str = None, brain regions, default is all loaded regions
-        #     states    (:) str = None, behavioral states, default is all
-        #     when      DESCRIBE, same input as eventIntervals
-        #     shift     bool = False, shift epochs together in time after filtering by state
-        #     window    float = 0.05 s, window size to count spikes
-        #     step      int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
-        #               default is no overlap
-        #     smooth    float = None, gaussian kernel std to smooth rate over time
-        #
-        # output:
-        #     rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
+    def unitFiringRate(self, regs:Iterable[str]=None, when=None, shift:bool=None, window:float=None, step:int=None, smooth:bool=None):
+        """ get units' firing rate
 
-        if states is not None and when is not None:
-            raise ValueError("'states' and 'when' cannot be specified at the same time")
-        if shift is None: shift = False
-        if window is None: window = 0.05
-        if step is None: step = 1
+        arguments:
+            regs      (:,) str = None, brain regions, default is all loaded regions
+            when      DESCRIBE, same input as eventIntervals
+            shift     bool = False, shift epochs together in time after filtering by state
+            window    float = 0.05 s, bin size to count spikes
+            step      int = 1, firing rate is computed in bins of length 'window' and overlap 'window' / 'step',
+                      default is no overlap
+            smooth    float = None, gaussian kernel std to smooth rate over time
 
-        regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
+        output:
+            rate      (:,n+1) float, every row is [time stamp, firing rates for n units]
+        """
 
-        # operate per session phase
-        phase_intervals = fmatoolbox.general.consolidateIntervals(self.eventIntervals(),epsilon=0.00001)
-        n_times = np.concatenate(([0],np.cumsum(np.ceil(np.diff(phase_intervals,1)*step/window)).astype(int)))
-        n_units = np.cumsum(np.concatenate(([1],[self.units(r).size for r in regs])))
-        firing_rate = np.zeros((n_times[-1],n_units[-1]))
-        for i, interval in enumerate(phase_intervals):
-            for j, r in enumerate(regs):
-                fr = fmatoolbox.analysis.istantaneousRate(self.spikes(r),start=interval[0],stop=interval[1],bin=window,step=step,smooth=smooth,g_range=self.units(r))
-                firing_rate[n_times[i]:n_times[i+1],n_units[j]:n_units[j+1]] = fr[:,1:]
-            firing_rate[n_times[i]:n_times[i+1],0] = fr[:,0]
+        regs, _, _ = self._checkIDs(regs=regs)
+        do_restrict = when is not None
+        when = self.eventIntervals(when)
+        do_restrict = do_restrict and len(when) > 1
 
-        # filter by state
-        if np.any(states != 'all'):
-            firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
-        if when is not None:
-            try:
-                # 1. 'when' is a list of time intervals
-                firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
-            except:
-                # 2. 'when' contains event names
-                firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals(when),shift=shift)
+        firing_rate = []
+        for j, r in enumerate(regs):
+            fr = fmatoolbox.analysis.istantaneousRate(self.spikes(regs=r),start=np.floor(when[0,0]),stop=when[-1,1],bin=window,step=step,smooth=smooth,g_range=self.units(r))
+            firing_rate.append(fr[:,1:])
+        firing_rate = np.column_stack(firing_rate)
+        time = fr[:,0]
+        firing_rate = np.column_stack((time,firing_rate))
+
+        # restrict to 'when'
+        if do_restrict:
+            firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
 
         return firing_rate
     
