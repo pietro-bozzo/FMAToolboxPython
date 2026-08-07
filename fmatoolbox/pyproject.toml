@@ -23,6 +23,7 @@ dependencies = [
 assemblies = [
     "scikit-learn",
     "scikit-image",
+    "joblib",
 ]
 
 [project.urls]
