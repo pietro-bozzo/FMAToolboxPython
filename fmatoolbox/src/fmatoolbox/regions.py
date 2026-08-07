@@ -1,4 +1,4 @@
-''' Handler for multi-region spiking data, stores session metadata and provides access to computed quantities '''
+""" Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region """
 
 import platformdirs
 import pathlib
@@ -21,20 +21,21 @@ def _regionDataPath():
 
 
 class regions:
-    # Handler for multi-region spiking data, stores session metadata and provides access to computed quantities
+    """ Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region """
 
     def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False,anat_file=None):
-        # construct a regions object
-        #
-        # arguments:
-        #     session        string, path to session .xml file
-        #     ids            (:) string = None, regions to load (default is all recorded regions)
-        #     phases         (:) string = None, session phases to load from <basename>.cat.evt file
-        #     states         (:) string = None, behavioral states to load (they correspond to extensions of files to load)
-        #     events         (:) string = None, additional events to load (they correspond to extensions of files to load)
-        #     load_spikes    bool = True, load spikes (False allows to access events without costly spike loading)
-        #     reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
-        #     anat_file      string = None, DESCRIBE
+        """ construct a regions object
+
+        arguments:
+            session        string, path to session .xml file
+            ids            (:) string = None, regions to load (default is all recorded regions)
+            phases         (:) string = None, session phases to load from <basename>.cat.evt file
+            states         (:) string = None, behavioral states to load (they correspond to extensions of files to load)
+            events         (:) string = None, additional events to load (they correspond to extensions of files to load)
+            load_spikes    bool = True, load spikes (False allows to access events without costly spike loading)
+            reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
+            anat_file      string = None, DESCRIBE
+        """
 
         session = pathlib.Path(session)
         self.session = session.parent
@@ -151,7 +152,7 @@ class regions:
             pass
 
         return
-    
+
 
     ## validation functions ##
 
@@ -293,9 +294,9 @@ class regions:
             intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv),epsilon=epsilon))
         # 2. intersection across different evs
         intervals = fmatoolbox.general.intersectIntervals(intervals)
-                
+
         return intervals
-    
+
 
     def eventInfo(self,event,attribute):
         # get event information, corresponding to a field of the event dictionary
@@ -431,73 +432,52 @@ class regions:
 
     ## functions to compute quantities ##
 
+
     def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, states:Iterable[str]=None, when=None, shift:bool=None,
-                   window=None, step:int=None, smooth=None, norm:bool=None):
-        '''
-        get region firing rate
+                   window:float=None, step:int=None, smooth:float=None, norm:bool=None):
+        """
+        get population firing rate per region
 
         arguments:
-            regs        (n) string = None, brain regions to compute firing rate of, default is all regions
-            e_groups    (m) int = None, electrode groups (starting at 1) to compute firing rate of, default is none
-            states      (:) string = None, behavioral states, default is all
+            regs        (n,) string = None, brain regions to compute firing rate of, default is all regions
+            e_groups    (m,) int = None, electrode groups (starting at 1) to compute firing rate of, default is none
             when        DESCRIBE, same input as eventIntervals
-            shift       bool = False, shift epochs together in time after filtering by state
-            window      float = 0.05, window size to count spikes
-            step        int = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+            shift       bool = False, shift epochs together in time after filtering by 'when'
+            window      float = 0.05 s, bin size to count spikes
+            step        int = 1, firing rate is computed with bins of length 'window' and overlap 'window' / 'step',
                         default is no overlap
             smooth      float = None, gaussian kernel std to smooth rate over time
             norm        bool = False, normalize by neuron number per region
 
         output:
-            rate        (:,n+m+1) float, every row is [time stamp, firing rates for n regions, firing rates for m electrodes],
+            rate        (:,n+m+1) float, every row is [time stamp (s), firing rates for n regions, firing rates for m electrodes],
                         input order of regions and electrodes is preserved
-        '''
+        """
 
-        if states is not None and when is not None:
-            raise ValueError("'states' and 'when' cannot be specified at the same time")
         if shift is None: shift = False
         if window is None: window = 0.05
         if step is None: step = 1
         if norm is None: norm = False
 
         regs, e_groups, states = self._checkIDs(regs=regs,e_groups=e_groups,states=states,fuse=True)
-
-        # find big holes in 'when' intervals, to speed up computation
-        # NOTE: it is actually number of time bins which defines big! Also, this looks every element of spikes many times, maybe useless!
+        do_restrict = when is not None
         when = self.eventIntervals(when)
-        holes = when[1:,0] - when[:-1,1] > 5000 # s
-        partition_idx = np.insert(np.cumsum(holes),0,0) # partition_idx[i] indexes partition to which when[i] belongs
-        partitions = np.unique(partition_idx)
-        do_restrict = shift or len(partitions) != len(partition_idx)
 
-        # operate per partition
         firing_rate = []
-        time = []
-        for p in partitions:
-            intervals = when[partition_idx == p]
-            fr_interv = []
-
-            if np.any(regs != None):
-                for r in regs:
-                    fr = fmatoolbox.analysis.istantaneousRate(self.spikes(regs=r)[:,0],start=np.floor(intervals[0,0]),stop=intervals[-1,1],bin=window,step=step,smooth=smooth)
-                    fr_interv.append(fr[:,1])
-
-            if np.any(e_groups != None):
-                for e in e_groups:
-                    fr = fmatoolbox.analysis.istantaneousRate(self.spikes(e_groups=e)[:,0],start=np.floor(intervals[0,0]),stop=intervals[-1,1],bin=window,step=step,smooth=smooth)
-                    fr_interv.append(fr[:,1])
-
-            firing_rate.append(np.stack(fr_interv,1))
-            time.append(fr[:,0])
-        firing_rate = np.concatenate((np.concatenate(time).reshape((-1,1)),np.concatenate(firing_rate)),1)
+        if np.any(regs != None):
+            for r in regs:
+                fr = fmatoolbox.analysis.istantaneousRate(self.spikes(regs=r)[:,0],start=np.floor(when[0,0]),stop=when[-1,1],bin=window,step=step,smooth=smooth)
+                firing_rate.append(fr[:,1])
+        if np.any(e_groups != None):
+            for e in e_groups:
+                fr = fmatoolbox.analysis.istantaneousRate(self.spikes(e_groups=e)[:,0],start=np.floor(when[0,0]),stop=when[-1,1],bin=window,step=step,smooth=smooth)
+                firing_rate.append(fr[:,1])
+        firing_rate = np.column_stack(firing_rate)
+        time = fr[:,0]
+        firing_rate = np.column_stack((time,firing_rate))
 
         if do_restrict:
             firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
-
-        # filter by state
-        if np.any(states != 'all'):
-            firing_rate = fmatoolbox.general.restrict(firing_rate,self.eventIntervals([states]),shift=shift)
-            warnings.warn("option 'states' is deprecated, use 'when' instead!")
 
         # normalize
         if norm:
