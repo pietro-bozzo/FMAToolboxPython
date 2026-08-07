@@ -52,7 +52,7 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
 
     rate = _hist_numba(times, float(start), float(bin), int(step), n_bins, groups, g_min, g_max)
     rate = rate.reshape(n_bins*step,-1) / bin # convert to rate (Hz), flatten along steps
-    t = start + bin/step/2 + np.linspace(0,(n_bins-1)*bin,n_bins*step) # make time axis
+    t = start + bin/2 + np.linspace(0,n_bins*bin - bin/step,n_bins*step) # make time axis
 
     # apply smoothing
     if smooth is not None:
