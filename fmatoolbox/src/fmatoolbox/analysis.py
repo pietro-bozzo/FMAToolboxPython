@@ -3,7 +3,6 @@
 import fmatoolbox.general
 import numpy as np
 import scipy as sp
-import joblib
 import statsmodels.stats.multitest
 import warnings
 from numba import njit
@@ -11,21 +10,19 @@ from typing import Callable
 
 
 def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None, step:int=None, smooth:float=None, g_range:tuple[int,int]=None):
-    """
-    estimate the istantaneous rate of a point process from a realization of its time stamps, e.g., the firing rate from spike times
+    """ estimate the istantaneous rate of a point process from a realization of its time stamps, e.g., the firing rate from spike times
 
     arguments:
-        samples     (n,) float | (n,2) float, every row is either [sample time (s)] or [sample time (s), process id]; if 1d, interpreted as (n,1)
-        start       float = min(samples[:,0]) s, time to start count at
-        stop        float = max(samples[:,0]) s, time to stop count at
-        bin         float = 0.05 s, time bin to count samples
-        step        int = 1, rate is computed in windows of length 'bin' and overlap 'bin' / 'step', default is no overlap
-        smooth      float = None, gaussian kernel std to smooth rate over time
-        g_range     (2) int, range of groups (process ids) to consider, default is [min(samples[:,1]), max(samples[:,1])]
-                    (boundaries included, only for 2-columns 'samples')
+        samples        (n,) float | (n,2) float, every row is either [sample time (s)] or [sample time (s), process id]; if 1d, interpreted as (n,1)
+        start, stop    float = min(samples[:,0]), max(samples[:,0]) s, time to start / stop count at (s)
+        bin            float = 0.05 s, time bin to count samples
+        step           int = 1, rate is computed in windows of length 'bin' and overlap 'bin' / 'step', default is no overlap
+        smooth         float = None, gaussian kernel std to smooth rate over time
+        g_range        (2,) int = [min(samples[:,1]), max(samples[:,1])], range of process ids to consider (boundaries included,
+                       only for 2-columns 'samples')
 
     output:
-        rate        (:,g+1) float, every row is [time stamp, rates for g processes], g is 1 if 'samples' has just one column
+        rate           (:,g+1) float, every row is [time stamp (s), rates for g processes], g is 1 if 'samples' has just one column
     """
 
     # validate input
@@ -35,55 +32,79 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
     if step % 1 or step == 0:
         raise ValueError("'step' must be a non-zero integer")
 
-    groups = []
-    if samples.ndim == 1:
-        times = samples
-    elif samples.shape[1] == 1:
-        times = samples.reshape(-1)
+    # parameters
+    if samples.ndim == 1 or samples.shape[1] == 1:
+        times = samples.ravel()
+        groups = np.zeros_like(times,dtype=np.int64)
+        g_min = 0
+        g_max = 0
     else:
         times = samples[:,0]
-        groups = samples[:,1]
+        groups = samples[:,1].astype(np.int64)
         if g_range is None:
-            g_range = np.unique(groups).astype(int)[[0,-1]]
+            g_min, g_max = np.unique(groups).astype(int)[[0,-1]]
         else:
-            g_range = np.array(g_range,dtype=int)
+            g_min = int(g_range[0])
+            g_max = int(g_range[-1])
     if start is None: start = times.min()
     if stop is None: stop = times.max()
-
-    def histogramVectorized(x,nbins):
-        a, b = x.shape
-        # assign bin indeces
-        bin_idx = (x / bin).astype(int) # bin_idx = 0, bin_idx = n_bins + 1 after 'stop'
-        bin_idx = np.clip(bin_idx,0,nbins-1)
-        offset = np.arange(b)[None,:] * nbins
-        hist = np.bincount((bin_idx+offset).ravel(), minlength=nbins*b).reshape(b,nbins).T
-        return hist
-
-    # repeat 'times' by 'step' times
-    times = np.tile(times[:,None],(1,step)) # (times, step)
-    # shift by: 'start', 'bin' to add bin before 'start', overlap for each repetition
-    times = times - start + bin - np.arange(step)*(bin/step)
-    # parameters
     n_bins = int((stop + bin - start) // bin)
-    n_bins2 = n_bins + 2 # add two bins: first for 'samples' before 'start', last for 'samples' after 'stop'
-    if len(groups) == 0:
-        hist = histogramVectorized(times,n_bins2)
-        rate = (hist[1:-1] / bin).ravel() # remove data outside [start, stop], convert to rate (Hz), flatten
-    else:
-        rate = []
-        for g in range(g_range[0],g_range[-1] + 1):
-            hist = histogramVectorized(times[groups==g],n_bins2)
-            rate.append((hist[1:-1]).ravel())
-        rate = np.array(rate).T / bin
 
-    # make time axis
-    t = start + bin/step/2 + np.linspace(0,(n_bins-1)*bin,n_bins*step)
+    rate = _hist_numba(times, float(start), float(bin), int(step), n_bins, groups, g_min, g_max)
+    rate = rate.reshape(n_bins*step,-1) / bin # convert to rate (Hz), flatten along steps
+    t = start + bin/step/2 + np.linspace(0,(n_bins-1)*bin,n_bins*step) # make time axis
 
     # apply smoothing
     if smooth is not None:
         rate = sp.ndimage.gaussian_filter(rate,smooth,axes=0)
 
     return np.column_stack((t,rate))
+
+
+@njit
+def _hist_numba(times, start, bin, step, nbins, groups, g_min, g_max):
+    """ build histograms corresponding to multiple temporally shifted windows, counting grouped samples
+
+    arguments:
+        times           (n,) float, timestamps
+        nbins           int, number of time bins
+        bin             float, bin width (s)
+        start           float, start time of the analysis (s)
+        step            int, number of temporal offsets (overlapping windows)
+        groups          (n,) int, group id associated with each timestamp
+        g_min, g_max    int, min / max group id included
+
+    output:
+        hist            (nbins,step,n_groups) int, histogram counts for each bin, temporal offset, and group
+    """
+
+    nspikes = len(times)
+    ngroups = g_max - g_min + 1
+    gap = bin / step
+
+    hist = np.zeros((nbins,step,ngroups),dtype=np.int64)
+    for i in range(nspikes):
+        gi = groups[i]
+        if gi >= g_min and gi <= g_max:
+            gi -= g_min
+            ti = times[i] - start # shift to begin counting at 'start'
+            for j in range(step):
+                bin_idx = int((ti - j * gap) / bin)
+                if bin_idx >= 0 and bin_idx < nbins:
+                    hist[bin_idx,j,gi] += 1
+
+    return hist
+
+
+def histogramVectorized(x,nbins):
+    # NOTE: appears to be faster than _hist_numba, but cannot handle groups
+    a, b = x.shape
+    # assign bin indeces
+    bin_idx = (x / bin).astype(int) # bin_idx = 0, bin_idx = n_bins + 1 after 'stop'
+    bin_idx = np.clip(bin_idx,0,nbins-1)
+    offset = np.arange(b)[None,:] * nbins
+    hist = np.bincount((bin_idx+offset).ravel(), minlength=nbins*b).reshape(b,nbins).T
+    return hist
 
 
 def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple[float,float]=None, n_bins:int=None, bin:float=None, step:int=None, smooth:float=None, fast:bool=False):
@@ -230,7 +251,7 @@ def jointPETH(samples, events, bin:float=None, step:int=None, n_bins=None, limit
                       i.e., their conditioned co-occurrence probability is the product of their average event PETHs
         difference    (n_bins0,n_bins1) float, 'joint' - 'null', co-occurrence rate (Hz) unexplained by the null model, values far from 0 suggest
                       that conditioning on 'events' is not sufficient to explain the co-occurrence of the two signals
-        '''
+    '''
 
     # 1. ensure PETHs are produced with the same bin size
     isscalar = lambda x: x is None or np.isscalar(x)
@@ -379,20 +400,22 @@ def CCG(samples, bin:float=None, limits:tuple[float,float]=None, fast:bool=None,
 
 
 def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
-    # compute avalanches' sizes and [start,stop] intervals from a time series
-    #
-    # arguments:
-    #     x            (:) float, time series uniformly sampled in time
-    #     threshold    float in [0,100] (%), percentile of x used as a threshold
-    #     time_step    float, time distance (s) between two consecutive elements of x
-    #     t0           float = 0 (s), time corresponding to first element of x
-    #
-    # output:
-    #     sizes        (n) float, avalanche sizes
-    #     intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
-    #     size_t       (m) float, size over time, in which every avalanche is separated by a 0
+    '''
+    compute avalanches' sizes and [start,stop] intervals from a time series
 
-    x = np.array(x)
+    arguments:
+        x            (:) float, time series uniformly sampled in time
+        threshold    float in [0,100] (%), percentile of x used as a threshold
+        time_step    float, time distance (s) between two consecutive elements of x
+        t0           float = 0 (s), time corresponding to first element of x
+
+    output:
+        sizes        (n) float, avalanche sizes
+        intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
+        size_t       (m) float, size over time, in which every avalanche is separated by a 0
+    '''
+
+    x = np.asarray(x)
 
     # threshold the signal
     threshold = np.percentile(x, threshold)
@@ -516,6 +539,11 @@ def cellAssembliesICA(spikes, window:float=None, when=None, drop_mix:bool=False)
 
 def reactivationStrength(raster, templates, threshold:float=5):
     # compute reactivation strength of assemblies as quadratic forms between raster and templates
+
+    try:
+        import joblib
+    except ImportError as e:
+        raise ImportError('reactivationStrength requires joblib, did you do: pip install "fmatoolbox[assemblies]" ?') from e
 
     def template_strength(template):
         return np.nansum(raster * (raster @ template), axis=1)
