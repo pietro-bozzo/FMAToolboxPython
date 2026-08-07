@@ -10,10 +10,11 @@ import warnings
 import xml.etree.ElementTree
 from collections.abc import Iterable
 
+
 def _regionDataPath():
     # get path to fmatoolbox/regions/ dir in user path
 
-    data_dir = pathlib.Path(platformdirs.user_data_dir('fmatoolbox','Pietro Bozzo')) / 'regions'
+    data_dir = pathlib.Path(platformdirs.user_data_dir('fmatoolbox',False)) / 'regions'
     data_dir.mkdir(parents=True, exist_ok=True)
 
     return data_dir
