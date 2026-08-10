@@ -422,10 +422,11 @@ class regions:
                 spikes.append(s[np.isin(s[:,1],e_group_units),:])
 
         spikes = np.concatenate(spikes)
-        spikes = spikes[spikes[:,0].argsort()] # sort by time
-
+        # restrict to 'when'
         if when is not None:
             spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals(when),shift=shift)
+        # sort by time
+        spikes = spikes[spikes[:,0].argsort()]
 
         return spikes
     
