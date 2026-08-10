@@ -7,10 +7,8 @@ import matplotlib.axes as mpla
 import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
 import matplotlib.typing as mplt
-import scipy.stats as spst
 import scipy as sp
 from collections.abc import Iterable
-from networkx.algorithms.centrality import flow_matrix
 from typing import Literal, Callable
 import matplotlib as mpl
 
@@ -151,8 +149,7 @@ def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, a
 
 def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:npt.NDArray[np.floating]|Callable|str=None,
                  sortax:int=None, xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=None, bar:str=None, ax:mpla.Axes=None):
-    '''
-    plot a 2D array as a colormap with optional normalization, sorting, and resampling
+    """ plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
         data            (n,m) float, data to visualize, rows correspond to first dimension
@@ -170,7 +167,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         aspect          float = 3/4, image aspect ratio
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
-    '''
+    """
 
     # store original shape in case data needs to be zoomed
     n_y, n_x = data.shape
@@ -178,7 +175,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     if zscore is not None:
         if zscore == 'all':
             zscore = None
-        data = spst.zscore(data,axis=zscore,nan_policy='omit')
+        data = sp.stats.zscore(data,axis=zscore,nan_policy='omit')
 
     if omitnan is not None:
         keep = ~np.all(np.isnan(data),axis=omitnan)
@@ -266,7 +263,7 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
         if y.shape[0] == 1:
             ci = lambda x : (x.flatten(), x.flatten())
         elif y.shape[0] < 500:
-            ci = lambda x : spst.bootstrap((x,),np.mean,n_resamples=500,vectorized=True,paired=True).confidence_interval
+            ci = lambda x : sp.stats.bootstrap((x,),np.mean,n_resamples=500,vectorized=True,paired=True).confidence_interval
         else:
             ci = lambda x : (x.mean(axis=0) - x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]), x.mean(axis=0) + x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]))
     if ax is None:
@@ -274,7 +271,7 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
 
     if zscore == 2:
         # z-score rows of y
-        y = spst.zscore(y,axis=1,nan_policy='omit')
+        y = sp.stats.zscore(y,axis=1,nan_policy='omit')
 
     # statistic value for each column
     y_line = np.nanmean(y,axis=0)
@@ -450,12 +447,12 @@ def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=N
         ax.axvspan(start,stop,color=color,alpha=alpha,**plot_kwargs)
 
 
-def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
-    '''
-    estimate and plot probability density function (PDF) of data
+def plotPDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm:Literal['density','max']=None,
+            color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+    """ estimate and plot probability density function (PDF) of data
 
     arguments:
-        x            (n,) tuple | array, data to plot
+        x            (n,) tuple | array, values drawn from n stochastic variables X_i, used to estimate their PDFs
         mode         str = {'normal','log','polar'}, DESCRIBE
         bandwidth    float | str = 'scott', bandwidth for gaussian kernel
         eps          float = 1e-12, small value used to avoid log(0)
@@ -465,13 +462,12 @@ def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points
         color        color = None, line color
         label        str = None, legend label for line
         ax           matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
-    '''
 
-    if mode is None: mode = 'normal'
-    if bandwidth is None: bandwidth = 0.05 if mode == 'polar' else 'scott'
-    if eps is None: eps = 1e-12
-    if n_points is None and bins is None: n_points = 50
-    if norm is None: norm = 'density'
+    output:
+        grid         (n,) list of (n_points,) float, values of X_i for which the PDF was evalueated
+        density      (n,) list of (n_points,) float, estimated PDFs
+    """
+
     if ax is None: ax = plt.gca()
     if isinstance(x,tuple):
         if color is None or isinstance(color,str):
@@ -486,74 +482,28 @@ def plotPDF(x, mode:str=None, bandwidth:float|str=None, eps:float=None, n_points
     grid = []
     density = []
     for i, data in enumerate(x):
-        # cast to array and validate
-        data = np.asarray(data)
-        data = data[~np.isnan(data)] # always ravels input: loosing a capability of gaussian_kde?
-        #if data.ndim == 2 and data.shape[1] == 1:
-        #    data = data.ravel()
-        if data.size < 2:
-            grid.append([])
-            density.append([])
-            continue
-
+        g, d = fmatoolbox.analysis.PDF(data,mode=mode,bandwidth=bandwidth,eps=eps,n_points=n_points,bins=bins,norm=norm)
         match mode:
             # 1. real-valued data using gaussian kernel density estimator
             case 'normal':
-                if n_points is None:
-                    this_grid = bins
-                else:
-                    this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid
-                kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
-                this_density = kde(this_grid)
-                if norm == 'max':
-                    this_density /= this_density.max()
-                ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
-
+                ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
             # 2. log-transformed data using gaussian kernel density estimator
             case 'log':
-                if data.min() <= 0:
-                    raise ValueError('log-transforming data requires positive values')
-                data = np.log(data + eps) # log-transform data
-                if n_points is None:
-                    this_grid = bins
-                else:
-                    this_grid = np.linspace(data.min(),data.max(),n_points) # linear grid in log-space
-                jacobian = np.exp(this_grid) # jacobian term to transform density back to linear
-                kde = sp.stats.gaussian_kde(data,bw_method=bandwidth)
-                this_density = kde(this_grid) / jacobian
-                if norm == 'max':
-                    this_density /= this_density.max()
-                ax.loglog(jacobian,this_density,color=color[i],label=label[i],**plot_kwargs)
-
+                jacobian = np.exp(g) # jacobian term to transform density back to linear
+                ax.loglog(jacobian,d,color=color[i],label=label[i],**plot_kwargs)
             # 3. circular data using von-Mises kernel density estimator
             case 'polar':
-                data = np.mod(data,2*np.pi)
-                if n_points is None:
-                    this_grid = bins
-                else:
-                    this_grid = np.linspace(0,2*np.pi,n_points) # linear grid in [0,2*pi]
-                this_density = np.zeros_like(this_grid)
-                for theta in data:
-                    this_density += spst.vonmises.pdf(this_grid-theta,1/bandwidth)
-                if norm == 'max':
-                    this_density /= this_density.max()
-                else:
-                    this_density /= len(data)
-                this_grid = np.concatenate((this_grid,this_grid+2*np.pi))
-                this_density = np.concatenate((this_density,this_density))
-                ax.plot(this_grid,this_density,color=color[i],label=label[i],**plot_kwargs)
-
-        grid.append(this_grid)
-        density.append(this_density)
-
+                ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
+        grid.append(g)
+        density.append(d)
     ax.set_yticks([])
 
     return grid, density
 
 
-def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, heigth:float=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, height:float=None, ax:mpla.Axes=None, **plot_kwargs):
 
-    if heigth is None: heigth = 1
+    if height is None: height = 1
 
     spikes = np.asarray(spikes)
     if spikes.ndim == 1:
@@ -578,7 +528,7 @@ def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, heigth:fl
     if ax is None:
         ax = plt.gca()
 
-    half_height = heigth / 2
+    half_height = height / 2
     ax.vlines(times, units-half_height, units+half_height, **plot_kwargs)
 
     return
