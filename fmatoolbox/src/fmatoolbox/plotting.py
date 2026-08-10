@@ -468,6 +468,7 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=No
         density      (n,) list of (n_points,) float, estimated PDFs
     """
 
+    if mode is None: mode = 'normal'
     if ax is None: ax = plt.gca()
     if isinstance(x,tuple):
         if color is None or isinstance(color,str):
