@@ -158,7 +158,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
                         if None, no normalization is applied
         omitnan         int = None, axis along which to drop slices of `data` if they contain only nans
         sortby          (:,) int | callable | 'peak' = None, optional method used to sort `data` along `sortax` (after optional z-scoring), either:
-                        - 'peak', sort rows or columns by the index of their maximum value along the opposite axis
+                        - 'peak' | 'peak-show', sort rows or columns by the index of their maximum value along the opposite axis; if '-show', also plot peaks
                         - (:,) int, array of indeces to sort data along `sortax`
                         - callable, must have signature ``f(data) -> array_like`` and return a 1D array used to sort data along `sortax`
         sortax          int = 0, axis along which sorting is performed
@@ -170,6 +170,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     """
 
     # store original shape in case data needs to be zoomed
+    data = np.array(data,ndmin=2)
     n_y, n_x = data.shape
 
     if zscore is not None:
@@ -183,9 +184,9 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
 
     if sortax is None: sortax = 0
     if sortby is not None:
-        if isinstance(sortby,str) and sortby == 'peak':
-            sortby = lambda x : np.argsort(np.argmax(x,1-sortax))
-            sort_idx = sortby(data)
+        if isinstance(sortby,str) and sortby.startswith('peak'):
+            peaks = np.argmax(data,1-sortax)
+            sort_idx = np.argsort(peaks)
         elif callable(sortby):
             sort_idx = sortby(data)
         else:
@@ -198,12 +199,12 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         data = sp.ndimage.zoom(data,(yzoom,xzoom))
 
     if x is None:
-        x = [0,n_x-1]
+        x = np.arange(n_x)
         dx = 0.5
     else:
         dx = (x[-1] - x[0]) / (data.shape[1] - 1) / 2 # here use post-zoom shape
     if y is None:
-        y = [0,n_y-1]
+        y = np.arange(n_y)
         dy = 0.5
     else:
         dy = (y[-1] - y[0]) / (data.shape[0] - 1) / 2
@@ -215,6 +216,14 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     im = ax.imshow(data,aspect='auto',vmin=vmin,vmax=vmax,origin='lower',extent=[x[0]-dx,x[-1]+dx,y[0]-dy,y[-1]+dy])
     if bar is not None:
         plt.colorbar(im,label=bar,ax=ax)
+
+    if sortby == 'peak-show':
+        if sortax == 0:
+            peaks = peaks if x is None else x[peaks]
+            ax.plot(np.sort(peaks),y,color='r')
+        else:
+            peaks = peaks if y is None else y[peaks]
+            ax.plot(x,np.sort(peaks),color='r')
 
     return im
 
