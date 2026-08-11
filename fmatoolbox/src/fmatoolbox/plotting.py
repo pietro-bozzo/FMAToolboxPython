@@ -313,6 +313,16 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
 
 
 def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None):
+    """ draw box plots for groups of data
+    note: calls matplotlib's boxplot, which sets xticks
+
+    arguments:
+        data
+        x
+        color     color = None
+        label     str = None, legend label for line
+        ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    """
 
     if ax is None:
         ax = plt.gca()
