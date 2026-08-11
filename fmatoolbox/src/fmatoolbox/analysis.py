@@ -647,42 +647,39 @@ def reactivationStrength(raster, templates, threshold:float=5):
 # --- statistics functions ---
 
 def MCpValue(surrogate,observed,alternative='two-sided'):
-   '''
-   compute Monte Carlo p-values comparing observed statistics to surrogate distributions
+    """ compute Monte Carlo p-values comparing observed statistics to surrogate distributions
 
-   arguments:
-       surrogate      (s,f) float, surrogate statistics; s: # surrogates, f: # features
-       observed       (f,) float, observed statistics
-       alternative    str = {"two-sided", "greater", "less"}, test direction
+    arguments:
+        surrogate      (s,f,...) float, surrogate statistics; s: n of surrogates, f: n of features
+        observed       (f,...) float, observed statistics, must have shape equal to surrogate.shape[1:]
+        alternative    str = {"two-sided", "greater", "less"}, test direction
 
-   output:
-       pvals          (f,) float, Monte Carlo p-values
-   '''
+    output:
+        pvals          (f,) float, Monte Carlo p-values
+    """
 
-   surrogate = np.asarray(surrogate)
-   observed = np.asarray(observed).ravel()
-   if surrogate.ndim == 1:
-       surrogate = surrogate.reshape((-1,1))
-   if surrogate.shape[1] != observed.shape[0]:
-       raise ValueError("'observed' must have one element for every column of 'surrogates'")
+    surrogate = np.asarray(surrogate)
+    observed = np.asarray(observed)
+    if np.any(surrogate.shape[1:] != observed.shape):
+        raise ValueError("'surrogate' must have the same shape of 'observed', except for the first dimension")
 
-   if alternative == "greater":
-       count = np.sum(surrogate >= observed, axis=0)
+    if alternative == "greater":
+        count = np.sum(surrogate >= observed, axis=0)
 
-   elif alternative == "less":
-       count = np.sum(surrogate <= observed, axis=0)
+    elif alternative == "less":
+        count = np.sum(surrogate <= observed, axis=0)
 
-   elif alternative == "two-sided":
-       greater = np.sum(surrogate >= observed, axis=0)
-       less = np.sum(surrogate <= observed, axis=0)
-       count = 2 * np.minimum(greater, less)
+    elif alternative == "two-sided":
+        greater = np.sum(surrogate >= observed, axis=0)
+        less = np.sum(surrogate <= observed, axis=0)
+        count = 2 * np.minimum(greater, less)
 
-   else:
-       raise ValueError("alternative must be 'greater', 'less', or 'two-sided'")
+    else:
+        raise ValueError("alternative must be 'greater', 'less', or 'two-sided'")
 
-   pvals = (count + 1) / (surrogate.shape[0] + 1) # +1 implement finite-sample Monte Carlo correction
+    pvals = (count + 1) / (surrogate.shape[0] + 1) # +1 implement finite-sample Monte Carlo correction
 
-   return np.minimum(pvals, 1.0)
+    return np.minimum(pvals, 1.0)
 
 
 def holmBonferroni(pvals, alpha:float=0.05, return_reject:bool=False):
