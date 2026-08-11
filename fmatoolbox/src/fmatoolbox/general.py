@@ -218,7 +218,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, fast:bool=N
     shuffle point-process events (i.e., time stamps) preserving their inter-event interval
 
     arguments:
-        events       (s,) | (s,f) float, samples to shuffle; m: # samples, f: # features, if 2d, first column contains time stamps
+        events       (s,) | (s,f) float, samples to shuffle; s: # samples, f: # features, if 2d, first column contains time stamps
         offset       float = 0 s, reference time, necessary when events start at a time != 0, e.g., for a portion of a recording
                      in [1000 s, 3000 s]; must be smaller than first event time, ignored if 'intervals' are provided
         n            int = 1, number of independent repetitions of the shuffling procedure, changes output shape
@@ -315,6 +315,33 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, fast:bool=N
         return shuffled, group
 
     return shuffled
+
+
+def circularShift(x, shift, axis:int=None):
+    """ shift circularly each slice of 'x' along a given axis
+
+    arguments:
+        x        ndarray to shift
+        shift    int | (:,) int, shift amount per slice; if int, the same shift is applied to each slice
+        axis     int = 0, axis to roll along; 0 means columns of 'x' will be rolled
+    """
+
+    if axis is None: axis = 0
+    shift = np.array(shift,ndmin=1)
+
+    n, m = x.shape[:2]
+    if axis == 0:
+        if shift.size == 1:
+            shift = np.repeat(shift,m,axis=0)
+        shifted = x[(np.arange(n)[:,None]-shift) % n, np.arange(m)]
+    elif axis == 1:
+        if shift.size == 1:
+            shift = np.repeat(shift,n,axis=0)
+        shifted = x[np.arange(n)[:,None], (np.arange(m)-shift[:,None]) % m]
+    else:
+        raise ValueError('not implemented!')
+
+    return shifted
 
 
 def subtractIntervals(a,b):
