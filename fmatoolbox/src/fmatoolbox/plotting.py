@@ -300,8 +300,11 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
         y_low = y_line - dy_low
         y_high = y_line + dy_high
 
+    copy_color = aprop['color'] is None
     if mode == 'area':
-        ax.plot(x,y_line,**lprop)
+        l = ax.plot(x,y_line,**lprop)
+        if copy_color:
+            aprop['color'] = l[0].get_color()
         ax.fill_between(x,y_low,y_high,**aprop)
     else:
         ax.errorbar(x,y_line,yerr=[y_low,y_high],**lprop)
