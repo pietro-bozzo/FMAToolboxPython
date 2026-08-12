@@ -521,36 +521,33 @@ class regions:
         return firing_rate
     
 
-    def avalanches(self, regs=None, states=None, when=None, shift:bool=None, thresh:float=None, window:float=None, step:int=None, smooth:bool=None, norm:bool=None, return_fr:bool=None):
-        # compute avalanches per region from population firing rate
-        #
-        # arguments:
-        #     regs         (r) str = None, brain regions, default is all loaded regions
-        #     states       (:) str = None, behavioral states, default is all
-        #     when         DESCRIBE, same input as eventIntervals
-        #     shift        bool = False, shift epochs together in time after filtering by state
-        #     thresh       float = 30, percentile to use as threshold, must be in [0,100]
-        #     window       float = 0.05 s, window size to count spikes
-        #     step         float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
-        #                  default is no overlap
-        #     smooth       float = None, gaussian kernel std to smooth rate over time before finding avalanches
-        #     norm         bool = False, normalize by neuron number per region
-        #
-        # output:
-        #     sizes        (n) float, avalanche sizes
-        #     intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
-        #     size_t       (m) float, size over time, in which every avalanche is separated by a 0
-        #     fr           (:,r+1) float, every row is [time stamp, firing rates for r regions], optional
+    def avalanches(self, regs=None, when=None, shift:bool=None, thresh:float=None, window:float=None, step:int=None, smooth:bool=None, norm:bool=None, return_fr:bool=None):
+        """compute avalanches per region from population firing rate
+
+        arguments:
+            regs         (r,) str = None, brain regions, default is all loaded regions
+            when         DESCRIBE, same input as eventIntervals
+            shift        bool = False, shift epochs together in time after filtering by state
+            thresh       float = 30, percentile to use as threshold, must be in [0,100]
+            window       float = 0.05 s, window size to count spikes
+            step         float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
+                         default is no overlap
+            smooth       float = None, gaussian kernel std to smooth rate over time before finding avalanches
+            norm         bool = False, normalize by neuron number per region
+
+        output:
+            sizes        (n) float, avalanche sizes
+            intervals    (n,2) float, each row is an avalanche's [start, stop] interval (s)
+            size_t       (m) float, size over time, in which every avalanche is separated by a 0
+            fr           (:,r+1) float, every row is [time stamp, firing rates for r regions], optional
+        """
 
         if thresh is None: thresh = 30
         if return_fr is None: return_fr = False
 
-        none_state = states is None
-        regs, _, states = self._checkIDs(regs=regs,states=states,fuse=True)
-        if none_state:
-            states = None
+        regs, _, _ = self._checkIDs(regs=regs)
 
-        fr = self.firingRate(regs=regs,states=states,when=when,shift=shift,window=window,step=step,smooth=smooth,norm=norm)
+        fr = self.firingRate(regs=regs,when=when,shift=shift,window=window,step=step,smooth=smooth,norm=norm)
         size = {}
         intervals = {}
         size_t = {}
