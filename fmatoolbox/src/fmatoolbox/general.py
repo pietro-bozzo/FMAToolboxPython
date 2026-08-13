@@ -1,6 +1,7 @@
 ''' General-purpose data processing for FMAToolbox '''
 
 import numpy as np
+import fmatoolbox.intervals
 
 
 def consolidateIntervals(intervals, epsilon:float=0, duration:float=0):
@@ -94,7 +95,7 @@ def intersectIntervals(intervals):
     # 2: intersect 2 interval sets
 
     # consolidate every interval set
-    intervals = [consolidateIntervals(i) for i in intervals]
+    intervals = [fmatoolbox.intervals.consolidate(i) for i in intervals]
 
     if intervals[0].size == 0:
         return intervals[0]
@@ -162,7 +163,7 @@ def restrict(samples, intervals, shift:bool=False, s_ind:bool=False, i_ind:bool=
         samples = samples.reshape((-1,1))
 
     # consolidate intervals to use vectorized algorithm
-    intervals = consolidateIntervals(intervals)
+    intervals = fmatoolbox.intervals.consolidate(intervals)
 
     # assign and index to each sample time, only odd indeces belong to intervals
     ind = np.digitize(samples[:,0],intervals.flatten())
@@ -345,19 +346,21 @@ def circularShift(x, shift, axis:int=None):
 
 
 def subtractIntervals(a,b):
-    # subtract from an interval set its intersection with a second set
-    #
-    # arguments:
-    #     a, b    (:,2) float, every row is [start time, stop time]
-    #
-    # output:
-    #     c       (:,2) float, a \ b
+    """subtract from an interval set its intersection with a second set
+
+    arguments:
+        a, b    (:,2) float, every row is [start time, stop time]
+
+    output:
+        c       (:,2) float, a \\ b
+    """
 
     # consolidate and flatten
-    a = consolidateIntervals(a).flatten()
-    b = consolidateIntervals(b).flatten()
-    if a.size == 0:
+    a = fmatoolbox.intervals.consolidate(a)
+    b = fmatoolbox.intervals.consolidate(b).flatten()
+    if a.size == 0 or b.size == 0:
         return a
+    a = a.flatten()
 
     # ind[i] is odd iff a[i] falls in an interval of b
     ind = np.digitize(a,b)

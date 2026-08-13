@@ -6,6 +6,7 @@ import numpy as np
 import re
 import fmatoolbox.analysis
 import fmatoolbox.data
+import fmatoolbox.intervals
 import warnings
 import xml.etree.ElementTree
 from collections.abc import Iterable
@@ -59,8 +60,10 @@ class regions:
         events = [e.rsplit('/',1)[-1] for e in events]
 
         # 2. assign session epochs
-        matches = self._matchEvents(phase_names,phases) if phases else phase_names
+        matches, _ = self._matchEvents(phase_names,phases) if phases else phase_names
         self.phases = {m: np.stack((loaded_events[m]['beginning'],loaded_events[m]['end']),axis=1) for m in matches}
+        if len(self.phases) == 0:
+            raise ValueError(f'None of {phases} was found')
         epoch_intervals = np.concatenate(list(self.phases.values()))
 
         # 3. assign states
@@ -228,7 +231,15 @@ class regions:
     def _matchEvents(self,events,patterns):
 
         matches = []
+        negations = []
         for pattern in patterns:
+
+            # assess whether events are to be subtracted
+            pattern = str(pattern)
+            neg = pattern[0] == '/'
+            if neg:
+                pattern = pattern[1:]
+
             m = re.fullmatch(r"(.*)#(\d+(?:,\d+)*)", pattern) # look for #
             if m:
                 # take match indexed by 'idx': digits after '#' (or none)
@@ -238,30 +249,44 @@ class regions:
                 for i in idx:
                     if 0 <= i < len(match):
                         matches.append(match[i])
+                        negations.append(neg)
             else:
                 # usual regexp
-                matches += [e for e in events if re.fullmatch(pattern,e)]
-        return matches
+                for e in events:
+                    if re.fullmatch(pattern,e):
+                        matches.append(e)
+                        negations.append(neg)
+
+        return matches, negations
 
     ## getters with minimal processing ##
 
-    def eventIntervals(self,events=None,epsilon=0):
-        # get [start, stop] intervals (s) for a union and/or intersection of events
-        #
-        # arguments:
-        #     events       (n) list of (:) string, each element is a list of events; to compute intervals:
-        #                    1. intervals corresponding to names from each list inside 'events' are united, yielding n interval sets
-        #                    2. output is intersection between this n sets
-        #                  e.g., events = [['rem','sws'],['sleep1']]
-        #                    1. 'rem' and 'sws' intervals are united (a), 'sleep1' is unchanged (b)
-        #                    2. intersection between (a) and (b) is output
-        #                  note: event names are interpreted as regular expressions and searched with re.fullmatch;
-        #                    if a name ends in # followed by digits, they are interpreted as the index of the match to keep
-        #                  e.g., 'sleep.*' matches all sleep events, 'sleep.*2' matches the third sleep event (if present)
-        #     epsilon      float = 0, intervals with bounds closer than 'epsilon' are consolidated
-        #
-        # output:
-        #     intervals    (:,2) double, each row is a [start, stop] interval (s)
+    def eventIntervals(self, events=None, epsilon:float=None, duration:float=None):
+        """get [start, stop] intervals (s) for combination of events
+
+        to compute 'intervals':
+            1. intervals corresponding to names from each list inside 'events' are united, yielding n interval sets
+            2. output is intersection between these n sets
+          e.g., events = [['rem','sws'],['sleep1']]
+            1. 'rem' and 'sws' intervals are united into [a], 'sleep1' is unchanged, [b]
+            2. intersection between [a] and [b] is the output
+
+        special conventions:
+            1) event names are interpreted as regular expressions and searched with re.fullmatch
+            2) if a name ends in # followed by digits, they are interpreted as the index of the match to keep
+            3) if a name starts with /, it is subtracted instead of united at step 1.
+          e.g., 'sleep.*' matches all sleep events, 'sleep.*2' matches the third sleep event (if present),
+            [['sleep1','/sws']] yields the intervals of 'sleep1' without 'sws'
+
+        arguments:
+            events       (n,) list of (:,) string, each element is a list of events;
+            epsilon      float = 0, intervals with bounds closer than 'epsilon' are consolidated
+            duration     float = 0, trim 'intervals' so that it has given total duration, if negative,
+                         duration is counted from the end and intervals are trimmed rightwards
+
+        output:
+            intervals    (:,2) double, each row is a [start, stop] interval (s)
+        """
 
         # 1. default output
         if events is None:
@@ -286,14 +311,29 @@ class regions:
             ev = np.asarray(ev)
             if ev.ndim == 0:
                 raise ValueError("'events' must be like a list of lists of strings")
-            interv = [self.phases[e][:,:2] for e in self._matchEvents(self.phases,ev)]
-            [interv.append(self.states[e][:,:2]) for e in self._matchEvents(self.states,ev)]
-            [interv.append(self.events[e]['intervals'][:,:2]) for e in self._matchEvents(self.events,ev)]
-            if len(interv) == 0:
-                raise ValueError(f"None of the following was found: {ev}")
-            intervals.append(fmatoolbox.general.consolidateIntervals(np.concatenate(interv),epsilon=epsilon))
+
+            union = []
+            subtraction = []
+            for match, negation in zip(*self._matchEvents(self.phases,ev)):
+                m = self.phases[match][:,:2]
+                subtraction.append(m) if negation else union.append(m)
+            for match, negation in zip(*self._matchEvents(self.states,ev)):
+                m = self.states[match][:,:2]
+                subtraction.append(m) if negation else union.append(m)
+            for match, negation in zip(*self._matchEvents(self.events,ev)):
+                m = self.events[match]['intervals'][:,:2]
+                subtraction.append(m) if negation else union.append(m)
+
+            if len(union) == 0 and len(subtraction) == 0:
+                raise ValueError(f'None of the following was found: {ev}')
+            union = fmatoolbox.intervals.consolidate(np.concatenate(union),eps=epsilon) if len(union) else np.empty((0,2))
+            subtraction = fmatoolbox.intervals.consolidate(np.concatenate(subtraction),eps=epsilon) if len(subtraction) else np.empty((0,2))
+            intervals.append(fmatoolbox.general.subtractIntervals(union,subtraction))
+
         # 2. intersection across different evs
         intervals = fmatoolbox.general.intersectIntervals(intervals)
+        if duration is not None and duration != 0:
+            intervals = fmatoolbox.intervals.trim(intervals,duration=duration,fast=True,eps=epsilon)
 
         return intervals
 
