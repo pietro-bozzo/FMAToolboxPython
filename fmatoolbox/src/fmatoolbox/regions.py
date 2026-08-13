@@ -60,10 +60,10 @@ class regions:
         events = [e.rsplit('/',1)[-1] for e in events]
 
         # 2. assign session epochs
-        matches, _ = self._matchEvents(phase_names,phases) if phases else phase_names
+        matches = self._matchEvents(phase_names,phases)[0] if phases else phase_names
         self.phases = {m: np.stack((loaded_events[m]['beginning'],loaded_events[m]['end']),axis=1) for m in matches}
         if len(self.phases) == 0:
-            raise ValueError(f'None of {phases} was found')
+            raise ValueError(f'none of {phases} was found')
         epoch_intervals = np.concatenate(list(self.phases.values()))
 
         # 3. assign states
