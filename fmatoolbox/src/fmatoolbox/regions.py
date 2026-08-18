@@ -44,7 +44,7 @@ class regions:
         self.rat = self.basename[3:6]
 
         # 1. load events
-        self.all_events = phases is None
+        self.all_epochs = phases is None # True if user did not restrict to some recording epochs
         if states is None:
             states = []
         elif isinstance(states,str):
@@ -62,13 +62,13 @@ class regions:
         # 2. assign session epochs
         matches = self._matchEvents(phase_names,phases)[0] if phases else phase_names
         self.phases = {m: np.stack((loaded_events[m]['beginning'],loaded_events[m]['end']),axis=1) for m in matches}
-        if len(self.phases) == 0:
+        if not self.all_epochs and len(self.phases) == 0:
             raise ValueError(f'none of {phases} was found')
-        epoch_intervals = np.concatenate(list(self.phases.values()))
+        epoch_intervals = np.concatenate(list(self.phases.values())) if self.phases else np.empty((0,2))
 
         # 3. assign states
         self.states = {s: np.stack((loaded_events[s]['col0'],loaded_events[s]['col1']),axis=1) for s in states}
-        if phase_names:
+        if not self.all_epochs:
             # restrict states to session epochs
             self.states = {s: fmatoolbox.general.restrict(self.states[s],epoch_intervals) for s in self.states}
             # build special states 'all' and 'other'
@@ -77,7 +77,7 @@ class regions:
             for name in states:
                 self.states['other'] = fmatoolbox.general.subtractIntervals(self.states['other'],self.states[name])
 
-        # 3. assign events
+        # 4. assign events
         self.events = {}
         for name in loaded_events:
             if name not in phase_names and name not in states:
@@ -102,7 +102,7 @@ class regions:
                     e.pop(end)
 
                 # restrict to session epochs
-                if phase_names:
+                if not self.all_epochs:
                     _, valid = fmatoolbox.general.restrict(e['intervals'],epoch_intervals,s_ind=True)
                     e = {k: v[valid] for k, v in e.items() if len(v) == len(valid)}
 
@@ -117,7 +117,7 @@ class regions:
             self.ids = ids
             self.region = {}
 
-        # 4. load spikes and store them per region
+        # 5. load spikes and store them per region
         if anat_file is None:
             anat_file = next(_regionDataPath().glob('*.anat'), None)
         else:
@@ -130,12 +130,12 @@ class regions:
                 self.region = {r: self.region[r] for r in ids}
             else:
                 self.ids = np.array(list(self.region.keys()),dtype=str)
-            if not self.all_events:
+            if not self.all_epochs:
                 # restrict spikes to session phases
                 for id in self.ids:
                     self.region[id]['spikes'] = fmatoolbox.general.restrict(self.region[id]['spikes'],epoch_intervals)
 
-        # 5. load electrode groups and channels per region
+        # 6. load electrode groups and channels per region
         try:
             anat = fmatoolbox.data.loadAnatomyFile(anat_file)
             anat = anat[anat['rat'] == int(self.rat)] # keep rat of interest, deduced from file name
@@ -290,7 +290,7 @@ class regions:
 
         # 1. default output
         if events is None:
-            return np.concatenate(list(self.phases.values()))
+            return np.concatenate(list(self.phases.values())) if self.phases else np.full((1,2),np.nan)
 
         # 2. numeric intervals
         try:
