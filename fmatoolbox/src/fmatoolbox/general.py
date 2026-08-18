@@ -4,6 +4,24 @@ import numpy as np
 import fmatoolbox.intervals
 
 
+def unwhere(indices,shape=None):
+    """perform the inverse operation of `numpy.where`
+
+    arguments:
+        indices    ndarray of int, output of `numpy.where`
+        shape      tuple = None, shape of the output array
+
+    output:
+        mask       ndarray of bool, original input to `numpy.where`
+    """
+
+    if shape is None:
+        shape = tuple(i.max() + 1 if len(i) else 0 for i in indices)
+    mask = np.zeros(shape,dtype=bool)
+    mask[indices] = True
+    return mask
+
+
 def consolidateIntervals(intervals, epsilon:float=0, duration:float=0):
     # remove overlaps in a set of intervals, yielding its most compact description (the union of its elements)
     # e.g., [[1,4],[2,6]] will become [1,6]
