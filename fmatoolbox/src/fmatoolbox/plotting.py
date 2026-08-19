@@ -463,6 +463,8 @@ def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None):
 def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=None, ax:mpla.Axes=None, **plot_kwargs):
 
     intervals = fmatoolbox.general.consolidateIntervals(intervals)
+    if intervals.size == 0:
+        return
     if ax is None:
         ax = plt.gca()
 
