@@ -112,13 +112,13 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
 
     arguments:
         samples    float, either:
-                    - (n) array of time stamps (s), describing a point process
+                    - (n,) array of time stamps (s), describing a point process
                     - (n,:) array, where each row is [time stamp (s), value1, ...], describing one or more continous signals
-        events     (m) float, synchronizing events' times, their order is maintained in the output 'mat'
-        groups     (n) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
-        g_range    (2) int = [0,max(groups)], min and max group id
-        groups     (:) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
-        limits     (2) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
+        events     (m,) float, synchronizing events' times, their order is maintained in the output 'mat'
+        groups     (n,) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
+        g_range    (2,) int = [0,max(groups)], min and max group id
+        groups     (:,) int, grouping indeces for samples, to compute separate PETHs (only for point process 'samples')
+        limits     (2,) float = [-0.5,0.5] (s), defines a window around events, divided into 'n_bins' time bins to compute PETH
         n_bins     float = 101, number of time bins around event times
         bin        float = None (s), bin size, can be given instead of 'n_bins', which will be deduced from 'bin' and 'limits'
         step       int = 1, only for point-process 'samples', for values higher than 1, time bins inside a window will overlap, yielding:
@@ -129,8 +129,8 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
 
     output:
         mat        (m,n_bins) float, every row corresponds to samples centered on an event
-        t          (n_bins) float, times (s)
-        m          (n_bins) float, average of 'samples' across events
+        t          (n_bins,) float, times (s)
+        m          (n_bins,) float, average of 'samples' across events
     '''
 
     # default values
@@ -150,7 +150,8 @@ def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple
             n_groups = groups.max() + 1
             squeeze = False
         if g_range is not None:
-            groups = groups[(groups >= g_range[0]) & (groups <= g_range[1])]
+            g_range = np.sort(g_range,axis=None)
+            groups = groups[(groups >= g_range[0]) & (groups <= g_range[-1])]
             groups -= int(g_range[0])
             n_groups -= int(g_range[0])
     else:
