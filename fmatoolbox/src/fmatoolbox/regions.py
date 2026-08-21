@@ -413,6 +413,11 @@ class regions:
         units = []
         unit_reg = []
         for r in self.ids:
+
+            # validate spikes
+            if 'e_group' not in self.region[r]:
+                raise ValueError('spikes were not loaded')
+
             if r in regs:
                 u = list(self.region[r]['e_group'].values())
                 units.extend(u)
