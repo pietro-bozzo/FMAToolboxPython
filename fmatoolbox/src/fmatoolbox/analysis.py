@@ -394,6 +394,7 @@ def CCG(samples, bin:float=None, limits:tuple[float,float]=None, fast:bool=None,
     t = (edges[1:] + edges[:-1]) / 2
 
     if norm == 'rate':
+        n_samples[n_samples==0] = 1 # avoid division by 0, CCG should be zero anyways for them
         ccg = ccg.astype(float) / (n_samples[:,None,None] * bin)
 
     return ccg, t
