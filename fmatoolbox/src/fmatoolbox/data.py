@@ -16,8 +16,7 @@ from os import PathLike
 
 
 def loadSpikeTimes(session:str|PathLike[str], output:str='dict', anat_file:str=None, return_elec:bool=False, return_loc:bool=False, reload:bool=False):
-    """
-    load spikes for a session
+    """load spikes for a session
 
     arguments:
         session        file, path to session .xml file, spike files must be in session folder
@@ -215,10 +214,11 @@ def loadCluFiles(session:str|PathLike[str], rate:float=None, output:str='dict', 
 
 
 def loadAnatomyFile(file_path:str|PathLike[str]):
-    # load .anat file, whose columns must be [rat, electrode, brain region] (comma separated)
-    #
-    # arguments:
-    #     file_path    string = None, path to .anat file
+    """load .anat file, whose columns must be [rat, electrode, brain region] (comma separated)
+
+    arguments:
+        file_path    file, path to .anat file
+    """
 
     return np.genfromtxt(file_path,delimiter=",",comments="%",dtype=[("rat",int),("electrode",int),("region","U50")])
 
@@ -246,7 +246,7 @@ def loadEventFile(filename:str|PathLike[str], compact:bool=False):
     # load events from a .evt file
     #
     # arguments:
-    #     filename    string, .evt file, each line must have format 'beginning of basename_event1_1'
+    #     filename    file, .evt file, each line must have format 'beginning of basename_event1_1'
     #     compact     bool = false, if true, return events as compact dictionary
     #
     # output:
@@ -363,16 +363,15 @@ def loadSpikeWaveforms(session:str|PathLike[str]):
 
 
 def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals=None, skip:int=None, cat:bool=None, trim:bool=None):
-    '''
-    load wideband data for a session, which is organized in records: chunks of data containing one sample for each channel
+    """load wideband data for a session, which is organized in records: chunks of data containing one sample for each channel
 
     arguments:
-        session      file, path to session .xml file, spike files must be in session folder
+        session      file, path to session .xml file, .dat file must be in session folder
         dtype        type = np.int16
         channels     (:,) int = None, channels to load, if None, load all channels; counted base 0 as NeuroScope
         intervals    (:,2) float = None, time intervals to load, if None, load all data
         skip         int = 0, number of records to skip after each record is read (to subsample data)
-        cat          bool = True, concatenate loaded data into a single array; if False, return a list of arrays for each interval
+        cat          bool = True, concatenate loaded data along time dimension; if False, return a list of arrays for each interval
         trim         bool = False, trim each loaded chunk of data so that they all have the same number of time points (useful if
                      'intervals' are of the same length)
 
@@ -380,7 +379,7 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
         data         (records, channels) dtype, data for each channel, each row is a record; list of arrays if 'cat' is False
         t            (records,) float, time of each record; list of arrays if 'cat' is False (contrary to FMAT standard 't' returned
                      separately from 'data' to preserve different data types)
-    '''
+    """
 
     file_root = pathlib.Path(session).with_suffix("")
     dat_file = file_root.with_suffix(".dat")
