@@ -24,18 +24,19 @@ def _regionDataPath():
 class regions:
     """ Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region """
 
-    def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False,anat_file=None):
-        """ construct a regions object
+    def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False,anat_file=None,lfp_anat=None):
+        """construct a regions object
 
         arguments:
-            session        string, path to session .xml file
-            ids            (:) string = None, regions to load (default is all recorded regions)
-            phases         (:) string = None, session phases to load from <basename>.cat.evt file
-            states         (:) string = None, behavioral states to load (they correspond to extensions of files to load)
-            events         (:) string = None, additional events to load (they correspond to extensions of files to load)
+            session        file, path to session .xml file
+            ids            (:,) string = None, regions to load (default is all recorded regions)
+            phases         (:,) string = None, session phases to load from <basename>.cat.evt file
+            states         (:,) string = None, behavioral states to load (they correspond to extensions of files to load)
+            events         (:,) string = None, additional events to load (they correspond to extensions of files to load)
             load_spikes    bool = True, load spikes (False allows to access events without costly spike loading)
             reload         bool = False, load spikes from original files, bypassing Regions/<basename>_spikes.npz backup
-            anat_file      string = None, DESCRIBE
+            anat_file      file = None, anatomy file mapping .clu files to brain regions DESCRIBE
+            lfp_anat       file = None, anatomy file mapping elecrode groups from .xml file to brain regions DESCRIBE
         """
 
         session = pathlib.Path(session)
@@ -136,8 +137,14 @@ class regions:
                     self.region[id]['spikes'] = fmatoolbox.general.restrict(self.region[id]['spikes'],epoch_intervals)
 
         # 6. load electrode groups and channels per region
+        if lfp_anat is None:
+            lfp_anat = next(_regionDataPath().glob('*.lfpanat'), None)
+        else:
+            lfp_anat = pathlib.Path(lfp_anat)
+            if not lfp_anat.exists():
+                lfp_anat = _regionDataPath() / lfp_anat
         try:
-            anat = fmatoolbox.data.loadAnatomyFile(anat_file)
+            anat = fmatoolbox.data.loadAnatomyFile(lfp_anat)
             anat = anat[anat['rat'] == int(self.rat)] # keep rat of interest, deduced from file name
             anat_ids = np.unique(anat['region'])
             tree = xml.etree.ElementTree.parse(session.with_suffix(".xml"))
