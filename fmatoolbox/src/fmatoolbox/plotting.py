@@ -228,7 +228,8 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     return im
 
 
-def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error']='area', alpha:float=0.5, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
+def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error']=None,
+            alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
     '''
     plot mean +/- confidence intervals of matrix data
 
@@ -257,6 +258,8 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
     if y.size == 0:
         return
     zscore = 0 if zscore is None else int(zscore)
+    if mode is None: mode = 'area' if y.shape[1] > 1 else 'error'
+    if alpha is None: alpha = 0.5
 
     # default values
     if lprop is None: lprop = {}
@@ -309,7 +312,7 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
             aprop['color'] = l[0].get_color()
         ax.fill_between(x,y_low,y_high,**aprop)
     else:
-        ax.errorbar(x,y_line,yerr=[y_low,y_high],**lprop)
+        ax.errorbar(x,y_line,yerr=[y_low,y_high],marker='o',**lprop)
 
     return
 
@@ -473,13 +476,14 @@ def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=N
         ax.axvspan(start,stop,color=color,alpha=alpha,**plot_kwargs)
 
 
-def plotPDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm:Literal['density','max']=None,
+def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm:Literal['density','max']=None,
             color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
-    """ estimate and plot probability density function (PDF) of data
+    """estimate and plot probability density function (PDF) of data
 
     arguments:
         x            (n,) tuple | array, values drawn from n stochastic variables X_i, used to estimate their PDFs
         mode         str = {'normal','log','polar'}, DESCRIBE
+        method       str = {'kde','discrete'}, DESCRIBE (only for 'normal' mode)
         bandwidth    float | str = 'scott', bandwidth for gaussian kernel
         eps          float = 1e-12, small value used to avoid log(0)
         n_points     int = 50, number of points used to evaluate PDF
@@ -495,6 +499,7 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=No
     """
 
     if mode is None: mode = 'normal'
+    if method is None: method = 'kde'
     if ax is None: ax = plt.gca()
     if isinstance(x,tuple):
         if color is None or isinstance(color,str):
@@ -509,11 +514,14 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=No
     grid = []
     density = []
     for i, data in enumerate(x):
-        g, d = fmatoolbox.analysis.PDF(data,mode=mode,bandwidth=bandwidth,eps=eps,n_points=n_points,bins=bins,norm=norm)
+        g, d = fmatoolbox.analysis.PDF(data,mode=mode,method=method,bandwidth=bandwidth,eps=eps,n_points=n_points,bins=bins,norm=norm)
         match mode:
             # 1. real-valued data using gaussian kernel density estimator
             case 'normal':
-                ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
+                if method == 'kde':
+                    ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
+                else:
+                    ax.bar(g,d,width=g[1]-g[0],color=color[i],label=label[i],alpha=0.7,**plot_kwargs)
             # 2. log-transformed data using gaussian kernel density estimator
             case 'log':
                 jacobian = np.exp(g) # jacobian term to transform density back to linear

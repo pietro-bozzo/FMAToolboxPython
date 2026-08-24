@@ -440,12 +440,14 @@ def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
     return sizes, intervals, size_t
 
 
-def PDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm:Literal['density','max']=None):
-    """ estimate probability density function (PDF) from data
+def PDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None,
+        bins=None, norm:Literal['density','max']=None):
+    """estimate probability density function (PDF) from data
 
     arguments:
         x            (:,) numeric, values drawn from a stochastic variable X, used to estimate its PDF
         mode         str = {'normal','log','polar'}, DESCRIBE
+        method       str = {'kde','discrete'}, DESCRIBE (only for 'normal' mode)
         bandwidth    float | str = 'scott', bandwidth for gaussian kernel
         eps          float = 1e-12, small value used to avoid log(0)
         n_points     int = 50, number of points used to evaluate PDF, ignored if 'bins' are provided
@@ -458,6 +460,7 @@ def PDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=None, 
     """
 
     if mode is None: mode = 'normal'
+    if method is None: method = 'kde'
     if bandwidth is None: bandwidth = 0.05 if mode == 'polar' else 'scott'
     if eps is None: eps = 1e-12
     if n_points is None and bins is None: n_points = 50
@@ -472,12 +475,22 @@ def PDF(x, mode:Literal['normal','log','polar']=None, bandwidth:float|str=None, 
     match mode:
         # 1. real-valued data using gaussian kernel density estimator
         case 'normal':
-            if n_points is None:
-                grid = bins
+            if method == 'kde':
+                if n_points is None:
+                    grid = bins
+                else:
+                    grid = np.linspace(x.min(),x.max(),n_points) # linear grid
+                kde = sp.stats.gaussian_kde(x,bw_method=bandwidth)
+                density = kde(grid)
             else:
-                grid = np.linspace(x.min(),x.max(),n_points) # linear grid
-            kde = sp.stats.gaussian_kde(x,bw_method=bandwidth)
-            density = kde(grid)
+                x_unique = np.unique(x)
+                dx = min(np.diff(x_unique))
+                n_points = int(np.round((x_unique[-1] - x_unique[0]) / dx)) + 1
+                if n_points > 1000:
+                    raise ValueError('x should be discrete')
+                grid = np.linspace(x_unique[0]-dx/2,x_unique[-1]+dx/2,n_points+1) # linear grid
+                density, _ = np.histogram(x,bins=grid,density=True)
+                grid = (grid[1:] + grid[:-1]) / 2
             if norm == 'max':
                 density /= density.max()
 
