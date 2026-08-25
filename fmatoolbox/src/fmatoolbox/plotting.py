@@ -253,7 +253,10 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
     
     y = np.array(y,ndmin=2)
     if y.ndim > 2:
-        raise ValueError("'y' must be 2d")
+        if all(s == 1 for s in y.shape[2:]):
+            y = y[(...,) + (0,) * (y.ndim - 2)]
+        else:
+            raise ValueError("'y' must be 2d")
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
     if y.size == 0:
         return
