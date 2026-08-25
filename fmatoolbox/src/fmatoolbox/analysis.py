@@ -329,21 +329,23 @@ def _ccg_numba(times, proc, nproc, bin_width, lag_start, lag_stop):
             j0 += 1
         j = j0
 
+        max_dt = max(lag_stop,-lag_start) # termination condition
         while j < n:
             dt = times[j] - ti
-            if dt >= lag_stop:
+            if dt >= max_dt:
                 break
             pj = proc[j]
 
             # positive lag contribution
-            if dt >= lag_start:
+            if lag_start <= dt < lag_stop:
                 b = int((dt - lag_start) * inv_bin)
                 if 0 <= b < nbins:
                     ccg[pi,pj,b] += 1
 
             # negative lag contribution (swap reference and target)
-            if -dt >= lag_start and -dt < lag_stop:
-                b = int((-dt - lag_start) * inv_bin)
+            neg_dt = -dt
+            if lag_start <= neg_dt < lag_stop:
+                b = int((neg_dt - lag_start) * inv_bin)
                 if 0 <= b < nbins:
                     ccg[pj,pi,b] += 1
 
