@@ -479,8 +479,8 @@ def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=N
         ax.axvspan(start,stop,color=color,alpha=alpha,**plot_kwargs)
 
 
-def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None, norm:Literal['density','max']=None,
-            color:mplt.ColorType=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None,
+            norm:Literal['density','max','cdf']=None, color:mplt.ColorType=None, alpha:float=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
     """estimate and plot probability density function (PDF) of data
 
     arguments:
@@ -491,8 +491,10 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
         eps          float = 1e-12, small value used to avoid log(0)
         n_points     int = 50, number of points used to evaluate PDF
         bins         (:,) float = None, bin edges, if None, bins are linearly spaced between min and max of x
-        norm         str = {'density','max'}, normalization mode, 'density' computes PDF, 'max' normalizes its maximum to 1
+        norm         str = {'density','max'}, normalization mode, 'density' computes PDF, 'max' normalizes its maximum to 1,
+                     'cdf' computes cumulative density function (CDF)
         color        color = None, line color
+        alpha        float, transparency, default is 0.7 for method 'discrete', 1.0 otherwise
         label        str = None, legend label for line
         ax           matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
 
@@ -507,11 +509,14 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
     if isinstance(x,tuple):
         if color is None or isinstance(color,str):
             color = [color] * len(x)
+        if alpha is None or isinstance(alpha,int) or isinstance(alpha,float):
+            alpha = [alpha] * len(x)
         if label is None or isinstance(label,str):
             label = [label] * len(x)
     else:
         x = (x,)
         color = [color]
+        alpha = [alpha]
         label = [label]
 
     grid = []
@@ -524,7 +529,8 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
                 if method == 'kde':
                     ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
                 else:
-                    ax.bar(g,d,width=g[1]-g[0],color=color[i],label=label[i],alpha=0.7,**plot_kwargs)
+                    if alpha[i] is None: alpha[i] = 0.7
+                    ax.bar(g,d,width=g[1]-g[0],color=color[i],label=label[i],alpha=alpha[i],**plot_kwargs)
             # 2. log-transformed data using gaussian kernel density estimator
             case 'log':
                 jacobian = np.exp(g) # jacobian term to transform density back to linear
