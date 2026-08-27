@@ -337,7 +337,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, fast:bool=N
 
 
 def circularShift(x, shift, axis:int=None):
-    """ shift circularly each slice of 'x' along a given axis
+    """shift circularly each slice of 'x' along a given axis
 
     arguments:
         x        ndarray to shift
@@ -361,6 +361,32 @@ def circularShift(x, shift, axis:int=None):
         raise ValueError('not implemented!')
 
     return shifted
+
+
+def jitter(samples,dt,low=None):
+    """add a jitter drawn from a uniform distribution to each sample's time stamp
+
+    arguments:
+        samples    (s,) | (s,f) numeric, samples to jitter; s: # samples, f: # features, if 2d, first column contains time stamps
+        dt         float, higher bound of the uniform distribution
+        low        float = -dt, lower bound of the uniform distribution
+
+    output:
+        samples    numeric, jittered samples (only time stamps are changed)
+    """
+
+    if low is None: low = -dt
+
+    samples = np.asarray(samples,dtype=float)
+    n_dim = samples.ndim
+    rng = np.random.default_rng()
+
+    if n_dim < 2:
+        samples += rng.uniform(low=low,high=dt,size=samples.shape)
+    elif n_dim == 2:
+        samples[:,0,...] += rng.uniform(low=low,high=dt,size=samples.shape[:1] + samples.shape[2:])
+
+    return samples
 
 
 def subtractIntervals(a,b):
