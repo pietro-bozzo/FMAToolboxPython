@@ -523,6 +523,10 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
     density = []
     for i, data in enumerate(x):
         g, d = fmatoolbox.analysis.PDF(data,mode=mode,method=method,bandwidth=bandwidth,eps=eps,n_points=n_points,bins=bins,norm=norm)
+        grid.append(g)
+        density.append(d)
+        if len(g) == 0:
+            continue
         match mode:
             # 1. real-valued data using gaussian kernel density estimator
             case 'normal':
@@ -538,8 +542,6 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
             # 3. circular data using von-Mises kernel density estimator
             case 'polar':
                 ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
-        grid.append(g)
-        density.append(d)
     ax.set_yticks([])
 
     return grid, density
