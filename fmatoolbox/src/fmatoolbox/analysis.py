@@ -399,7 +399,7 @@ def CCG(samples, bin:float=None, limits:tuple[float,float]=None, fast:bool=None,
     if norm == 'rate':
         ccg = ccg.astype(float) / (n_samples[:,None,None] * bin)
     elif norm == 'density':
-        ccg = ccg.astype(float) / (n_samples[:,None,None] * n_samples[None,:,None] * bin)
+        ccg = ccg.astype(float) / (np.sqrt(n_samples[:,None,None]) * np.sqrt(n_samples[None,:,None]) * bin)
 
     return ccg, t
 
@@ -705,38 +705,37 @@ def MCpValue(surrogate,observed,alternative='two-sided'):
 
 
 def holmBonferroni(pvals, alpha:float=0.05, return_reject:bool=False):
-   '''
-   Holm-Bonferroni correction for multiple tests
+    """Holm-Bonferroni correction for multiple tests
 
-   arguments:
-       pvals            (n,) float, p values, NaNs are ignored in the correction procedure and propagated in output
-       alpha            float = 0.05, significance level, must be in [0,1]
-       return_reject    bool = False, return also rejection decisions
+    arguments:
+        pvals            ndarray[float], p values, NaNs are ignored in the correction procedure and propagated in output
+        alpha            float = 0.05, significance level, must be in [0,1]
+        return_reject    bool = False, return also rejection decisions
 
-   output:
-       corrected        (n,) float, adjusted p values
-       reject           (n,) bool, optional, true for hypothesis that can be rejected
-   '''
+    output:
+        corrected        (n,) float, adjusted p values
+        reject           (n,) bool, optional, true for hypothesis that can be rejected
+    """
 
-   pvals = np.asarray(pvals)
-   original_shape = pvals.shape
-   flat = pvals.ravel()
-   valid_mask = np.isfinite(flat) # valid (non-NaN) p-values
-   corrected_flat = np.full_like(flat,np.nan,dtype=float)
-   reject_flat = np.full_like(flat,False,dtype=bool)
+    pvals = np.asarray(pvals)
+    original_shape = pvals.shape
+    flat = pvals.ravel()
+    valid_mask = np.isfinite(flat) # valid (non-NaN) p-values
+    corrected_flat = np.full_like(flat,np.nan,dtype=float)
+    reject_flat = np.full_like(flat,False,dtype=bool)
 
-   if valid_mask.any():
-       reject, corrected, _, _ = statsmodels.stats.multitest.multipletests(flat[valid_mask],alpha=alpha,method="holm")
-       corrected_flat[valid_mask] = corrected
-       reject_flat[valid_mask] = reject
+    if valid_mask.any():
+        reject, corrected, _, _ = statsmodels.stats.multitest.multipletests(flat[valid_mask],alpha=alpha,method="holm")
+        corrected_flat[valid_mask] = corrected
+        reject_flat[valid_mask] = reject
 
-   # restore original shape
-   corrected = corrected_flat.reshape(original_shape)
-   reject = reject_flat.reshape(original_shape)
+    # restore original shape
+    corrected = corrected_flat.reshape(original_shape)
+    reject = reject_flat.reshape(original_shape)
 
-   if return_reject:
-       return corrected, reject
-   return corrected
+    if return_reject:
+        return corrected, reject
+    return corrected
 
 
 def maxStatisticTest(data, surrogate, statistic=None, group=None, alpha:float=0.05, alternative:str='two-sided'):
