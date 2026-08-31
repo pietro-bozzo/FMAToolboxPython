@@ -148,8 +148,8 @@ def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, a
 
 
 def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:npt.NDArray[np.floating]|Callable|str=None,
-                 sortax:int=None, xzoom:float=None, yzoom:float=None, x=None, y=None, aspect:float=None, bar:str=None, ax:mpla.Axes=None):
-    """ plot a 2D array as a colormap with optional normalization, sorting, and resampling
+                 sortax:int=None, xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:float=None, bar:str=None, ax:mpla.Axes=None):
+    """plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
         data            (n,m) float, data to visualize, rows correspond to first dimension
@@ -163,6 +163,8 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
                         - callable, must have signature ``f(data) -> array_like`` and return a 1D array used to sort data along `sortax`
         sortax          int = 0, axis along which sorting is performed
         xzoom, yzoom    float = None, optional horizontal / vertical resampling factor passed to ``scipy.ndimage.zoom`` (after sorting)
+        smooth          float | (float,float) = None, standard deviation of gaussian kernel passed to ``scipy.ndimage.gaussian_filter`` (after zoom)
+        alpha           float | (n,m) float = None, transparency mask for `data` (e.g., to show significance of pixels), values must be in [0,1]
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
         aspect          float = 3/4, image aspect ratio
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`
@@ -173,15 +175,18 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     data = np.array(data,ndmin=2)
     n_y, n_x = data.shape
 
+    # 1. z-score
     if zscore is not None:
         if zscore == 'all':
             zscore = None
         data = sp.stats.zscore(data,axis=zscore,nan_policy='omit')
 
+    # 2. remove nans
     if omitnan is not None:
         keep = ~np.all(np.isnan(data),axis=omitnan)
         data = data[:,keep] if omitnan == 0 else data[keep,:]
 
+    # 3. sort rows / columns
     if sortax is None: sortax = 0
     if sortby is not None:
         if isinstance(sortby,str) and sortby.startswith('peak'):
@@ -193,11 +198,17 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
             sort_idx = sortby
         data = data[sort_idx,:] if sortax == 0 else data[:,sort_idx]
 
+    # 4. zoom
     if xzoom is not None or yzoom is not None:
         xzoom = 1 if xzoom is None else xzoom
         yzoom = 1 if yzoom is None else yzoom
         data = sp.ndimage.zoom(data,(yzoom,xzoom))
 
+    # 5. smooth
+    if smooth is not None:
+        data = sp.ndimage.gaussian_filter(data,smooth)
+
+    # set up axes limits
     if x is None:
         x = np.arange(n_x)
         dx = 0.5
@@ -214,9 +225,12 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     if aspect is None: aspect = 3 / 4
     ax.set_aspect(aspect)
     im = ax.imshow(data,aspect='auto',vmin=vmin,vmax=vmax,origin='lower',extent=[x[0]-dx,x[-1]+dx,y[0]-dy,y[-1]+dy])
+    if alpha is not None:
+        im.set_alpha(alpha)
     if bar is not None:
         plt.colorbar(im,label=bar,ax=ax)
 
+    # plot peaks
     if sortby == 'peak-show':
         if sortax == 0:
             peaks = peaks if x is None else x[peaks]
