@@ -152,7 +152,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     """plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
-        data            (n,m) float, data to visualize, rows correspond to first dimension
+        data            (n,m) float, data to visualize, rows of the resulting image correspond to `data`'s first dimension
         vmin, vmax      float = None, lower / upper bound of the colormap, if None uses autoscale
         zscore          int | 'all' = None, if int, specifies axis along which to z-score `data`; if 'all', compute z-score over whole array,
                         if None, no normalization is applied
@@ -213,12 +213,12 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         x = np.arange(n_x)
         dx = 0.5
     else:
-        dx = (x[-1] - x[0]) / (data.shape[1] - 1) / 2 # here use post-zoom shape
+        dx = 0.5 if n_x == 1 else (x[-1] - x[0]) / (data.shape[1] - 1) / 2 # here use post-zoom shape
     if y is None:
         y = np.arange(n_y)
         dy = 0.5
     else:
-        dy = (y[-1] - y[0]) / (data.shape[0] - 1) / 2
+        dy = 0.5 if n_y == 1 else (y[-1] - y[0]) / (data.shape[0] - 1) / 2
     if ax is None:
         ax = plt.gca()
 
