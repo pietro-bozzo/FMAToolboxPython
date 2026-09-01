@@ -1,4 +1,4 @@
-""" Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region """
+"""Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region"""
 
 import platformdirs
 import pathlib
@@ -69,7 +69,7 @@ class regions:
 
         # 3. assign states
         self.states = {s: np.stack((loaded_events[s]['col0'],loaded_events[s]['col1']),axis=1) for s in states}
-        if not self.all_epochs:
+        if self.phases:
             # restrict states to session epochs
             self.states = {s: fmatoolbox.general.restrict(self.states[s],epoch_intervals) for s in self.states}
             # build special states 'all' and 'other'
