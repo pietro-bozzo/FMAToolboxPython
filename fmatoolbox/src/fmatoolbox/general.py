@@ -337,7 +337,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, fast:bool=N
 
 
 def circularShift(x, shift, axis:int=None):
-    """shift circularly each slice of 'x' along a given axis
+    """independent circular shift of each slice of 'x' along a given axis
 
     arguments:
         x        ndarray to shift
