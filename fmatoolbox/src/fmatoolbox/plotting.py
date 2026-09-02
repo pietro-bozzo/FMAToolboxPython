@@ -1,4 +1,4 @@
-''' Plotting utilities for publication grade figures '''
+"""Plotting utilities for publication grade figures"""
 
 import fmatoolbox
 import numpy as np
@@ -8,9 +8,9 @@ import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
 import matplotlib.typing as mplt
 import scipy as sp
-from collections.abc import Iterable
+from collections.abc import Iterable, Collection, Sequence
 from typing import Literal, Callable
-import matplotlib as mpl
+from os import PathLike
 
 
 def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
@@ -110,13 +110,48 @@ def setProp(axs:mpla.Axes|Iterable[mpla.Axes], xlabelcolor:dict[int,mplt.ColorTy
     return
 
 
-def saveFigure(fig, fname:str, format:str):
+def saveFigure(fig, fname:str|PathLike[str], format:str|Iterable[str]):
 
     # promote single format to iterable
     if isinstance(format,str):
-        format = [format]
+        format = (format,)
     for f in format:
         fig.savefig(str(fname)+'.'+f,transparent=True,bbox_inches='tight',pad_inches=0,format=f,dpi=200)
+
+    return
+
+
+def setCLim(im:Collection,vmin:float|Sequence[float]=None,vmax:float|Sequence[float]=None):
+    """set limits of multiple colormaps
+
+    arguments:
+        im            Collection[images]
+        vmin, vmax    float | Sequence[float] = None, values to set as min (max) of the colormaps of 'im', either:
+                       - None: all images' min (max) will be set as the overall min (max)
+                       - float: one value per image or one for all images
+    """
+
+    auto = vmin is None or vmax is None
+    if auto:
+        min_v = np.inf
+        max_v = -np.inf
+        for image in im:
+            clim = image.get_clim()
+            min_v = min(min_v,clim[0])
+            max_v = max(max_v,clim[1])
+        vmin = min_v if vmin is None else vmin
+        vmax = max_v if vmax is None else vmax
+
+    if ~isinstance(vmin,Sequence):
+        vmin = (vmin,) * len(im)
+    if ~isinstance(vmax,Sequence):
+        vmax = (vmax,) * len(im)
+
+    for i, image in enumerate(im):
+        clim = list(image.get_clim())
+        clim[0] = clim[0] if vmin[i] is None else vmin[i]
+        clim[1] = clim[1] if vmax[i] is None else vmax[i]
+        image.set_clim(clim)
 
     return
 
@@ -124,7 +159,7 @@ def saveFigure(fig, fname:str, format:str):
 def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None):
     # plot columns of 'data', interpreting the first as the x axis and all others as y values
 
-    data = np.array(data, ndmin=2)
+    data = np.array(data,ndmin=2)
     x = data[:,0]
     if ax is None:
         ax = plt.gca()
@@ -171,9 +206,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     """
 
-    # store original shape in case data needs to be zoomed
     data = np.array(data,ndmin=2)
-    n_y, n_x = data.shape
 
     # 1. z-score
     if zscore is not None:
@@ -185,6 +218,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     if omitnan is not None:
         keep = ~np.all(np.isnan(data),axis=omitnan)
         data = data[:,keep] if omitnan == 0 else data[keep,:]
+    n_y, n_x = data.shape # store shape in case data needs to be zoomed
 
     # 3. sort rows / columns
     if sortax is None: sortax = 0
