@@ -467,8 +467,10 @@ def loadLFP(session:str|PathLike[str]):
     return
 
 
-def saveMatrix():
-   # save matrix in standard FMAT format, prepending metadata header 
+def saveEvent(session:str|PathLike[str],event,format,columns):
+    """save event in standard FMAT format, prepending metadata header
+
+    """
 
     print('implement!')
 
@@ -476,9 +478,7 @@ def saveMatrix():
 
 
 def printXML(session:str|PathLike[str]):
-    """
-    simple utility to print contents of a session's .xml file
-    """
+    """simple utility to print contents of a session's .xml file"""
 
     def print_xml(element,level=0):
         indent = "  " * level
