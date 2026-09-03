@@ -143,23 +143,24 @@ class regions:
             lfp_anat = pathlib.Path(lfp_anat)
             if not lfp_anat.exists():
                 lfp_anat = _regionDataPath() / lfp_anat
-        try:
-            anat = fmatoolbox.data.loadAnatomyFile(lfp_anat)
-            anat = anat[anat['rat'] == int(self.rat)] # keep rat of interest, deduced from file name
-            anat_ids = np.unique(anat['region'])
-            tree = xml.etree.ElementTree.parse(session.with_suffix(".xml"))
-            root = tree.getroot()
-            channel_groups = root.find(".//channelGroups").findall("group")
-            channel_groups = [[int(element.text) for element in c.findall(".//channel")] for c in channel_groups]
-            if len(self.region):
-                for id in self.ids:
-                    self.region[id]['channels'] = {int(e): channel_groups[e-1] for e in anat[anat['region'] == id]['electrode']}
-            else:
-                self.ids = anat_ids.tolist()
-                for id in self.ids:
-                    self.region[id] = {'channels': {int(e): channel_groups[e-1] for e in anat[anat['region'] == id]['electrode']} }
-        except FileNotFoundError:
-            pass
+        if lfp_anat is not None:
+            try:
+                anat = fmatoolbox.data.loadAnatomyFile(lfp_anat)
+                anat = anat[anat['rat'] == int(self.rat)] # keep rat of interest, deduced from file name
+                anat_ids = np.unique(anat['region'])
+                tree = xml.etree.ElementTree.parse(session.with_suffix(".xml"))
+                root = tree.getroot()
+                channel_groups = root.find(".//channelGroups").findall("group")
+                channel_groups = [[int(element.text) for element in c.findall(".//channel")] for c in channel_groups]
+                if len(self.region):
+                    for id in self.ids:
+                        self.region[id]['channels'] = {int(e): channel_groups[e-1] for e in anat[anat['region'] == id]['electrode']}
+                else:
+                    self.ids = anat_ids.tolist()
+                    for id in self.ids:
+                        self.region[id] = {'channels': {int(e): channel_groups[e-1] for e in anat[anat['region'] == id]['electrode']} }
+            except FileNotFoundError:
+                pass
 
         return
 
