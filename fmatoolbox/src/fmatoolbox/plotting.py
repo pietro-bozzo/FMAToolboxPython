@@ -276,13 +276,12 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     return im
 
 
-def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error']=None,
+def semPlot(x, y=None, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error','bar']=None,
             alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
-    '''
-    plot mean +/- confidence intervals of matrix data
+    """plot mean +/- confidence intervals of matrix data
 
     arguments:
-        x         (n) float, x coordinates
+        x         (n,) float = range(n), x coordinates (optional)
         y         (:,n) float, data to plot, each column corresponds to a value of x
         ci        callable | 'nansem', used to compute confidence intervals for every column of `y`, either:
                   - 'nansem', standard error of the mean (SEM) for each column of `y`, ignoring missing values
@@ -290,29 +289,38 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
         zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
         smooth    float = None, gaussian kernel std for smoothing over time, NOT IMPLEMENTED
         color     color = None
-        mode      str = 'area' | 'error', plot 'ci' either as a shaded area or as error bars
-        alpha     float = 0.5, shaded area transparency value (only for 'area' mode)
+        mode      str = 'area' | 'error' | 'bar', plot 'ci' either as a shaded area, line with error bars, or bar plot
+        alpha     float = 0.5, area transparency value (only for 'area' and 'bar' mode)
         label     str = None, legend label for line
         lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
         aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between (only for 'area' mode)
         ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
-    '''
+    """
     # NOTE: should maybe change y to match plt.plot: each row of 'y' corresponds to a values of 'x'
-    
+
+    # 'x' is optional
+    if y is None:
+        y = x
+        x = None
+
+    # validate 'y'
     y = np.array(y,ndmin=2)
     if y.ndim > 2:
         if all(s == 1 for s in y.shape[2:]):
             y = y[(...,) + (0,) * (y.ndim - 2)]
         else:
             raise ValueError("'y' must be 2d")
+    if x is None: x = np.arange(y.shape[1])
+    if len(x) != y.shape[1]:
+        raise ValueError("'y' must have one column per element of 'x'")
+
+    # default values
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
     if y.size == 0:
         return
     zscore = 0 if zscore is None else int(zscore)
     if mode is None: mode = 'area' if y.shape[1] > 1 else 'error'
     if alpha is None: alpha = 0.5
-
-    # default values
     if lprop is None: lprop = {}
     if aprop is None: aprop = {}
     lprop.setdefault('color',color)
@@ -357,13 +365,17 @@ def semPlot(x, y, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorTy
         y_high = y_line + dy_high
 
     copy_color = aprop['color'] is None
-    if mode == 'area':
-        l = ax.plot(x,y_line,**lprop)
-        if copy_color:
-            aprop['color'] = l[0].get_color()
-        ax.fill_between(x,y_low,y_high,**aprop)
-    else:
-        ax.errorbar(x,y_line,yerr=[y_low,y_high],marker='o',**lprop)
+    match mode:
+        case 'area':
+            l = ax.plot(x,y_line,**lprop)
+            if copy_color:
+                aprop['color'] = l[0].get_color()
+            ax.fill_between(x,y_low,y_high,**aprop)
+        case 'error':
+            ax.errorbar(x,y_line,yerr=[y_low,y_high],marker='o',**lprop)
+        case 'bar':
+            width = x[1] - x[0]
+            ax.bar(x,y_line,width=width,yerr=[y_line-y_low,y_high-y_line],**aprop)
 
     return
 
