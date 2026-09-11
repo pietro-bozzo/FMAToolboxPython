@@ -27,6 +27,7 @@ def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster
 
     lw = 1 if format == 'paper' else 2
     axw = 1.3 if format == 'paper' else 2.1
+    ax_title_fs = 9 if format == 'paper' else 18
     ax_label_fs = 9 if format == 'paper' else 18
     ax_label_pad = 0.1 if format == 'paper' else 1
     ax_tick_fs = 8 if format == 'paper' else 14
@@ -41,6 +42,7 @@ def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster
         # adjust thickness and font size
         [ax.spines[spine].set_linewidth(lw) for spine in ['bottom','left','polar'] if spine in ax.spines]
         ax.tick_params(width=axw,labelsize=ax_tick_fs,pad=ax_tick_pad,length=ax_tick_l)
+        ax.title.set_fontsize(ax_title_fs) # NOTE: seems not to work
         ax.xaxis.label.set_fontsize(ax_label_fs)
         ax.yaxis.label.set_fontsize(ax_label_fs)
         ax.xaxis.labelpad = ax_label_pad
@@ -154,6 +156,44 @@ def setCLim(im:Collection,vmin:float|Sequence[float]=None,vmax:float|Sequence[fl
         image.set_clim(clim)
 
     return
+
+
+def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:mpla.Axes=None, **kwargs):
+    """wrapper around `matplotlib.pyplot.plot` with extra functionalities
+
+    arguments:
+        x              (n,) float = range(n), x coordinates (optional)
+        y              (n,) | (n,:) float, data to plot, each row corresponds to a value of x
+        start, stop    float, if given, only plot rows of `y` corresponding to `x` in the interval [start,stop] TO IMPLEMENT
+        polar          bool = False, if True, data is expected to span a full circle, `x[-1] + x[1] - x[0]` and `y[0]` are appended
+                       to `x` and `y` to close a circular plot, and eventual smoothing (NOT IMPLEMENTED!) is applied in a circular fashion
+        ax             matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+
+    note: all extra arguments are passed to `matplotlib.pyplot.plot`
+    """
+
+    if ax is None:
+        ax = plt.gca()
+
+    if polar:
+        # 'x' is optional
+        if y is None:
+            y = x
+            x = None
+
+        y = np.array(y, ndmin=1)
+        if y.ndim > 2:
+            if all(s == 1 for s in y.shape[2:]):
+                y = y[(...,) + (0,) * (y.ndim - 2)]
+            else:
+                raise ValueError("'y' must be 1d or 2d")
+        if x is None: x = np.arange(y.shape[0])
+
+        x = np.append(x, x[-1]+x[1]-x[0])
+        y = np.append(y, y[0:1], axis=0)
+
+    args = (x, y, *args) if y is not None else (x, *args)
+    return ax.plot(*args, **kwargs)
 
 
 def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None):
@@ -276,7 +316,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     return im
 
 
-def semPlot(x, y=None, ci:str|Callable=None, zscore:bool|int=None, color:mplt.ColorType=None, mode:Literal['area','error','bar']=None,
+def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None, color:mplt.ColorType=None, mode:Literal['area','error','bar']=None,
             alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
     """plot mean +/- confidence intervals of matrix data
 
@@ -286,8 +326,11 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:bool|int=None, color:mplt.Co
         ci        callable | 'nansem', used to compute confidence intervals for every column of `y`, either:
                   - 'nansem', standard error of the mean (SEM) for each column of `y`, ignoring missing values
                   - callable, must have signature ``low, high = ci(y)``
-        zscore    bool = False | int, if True (or 1), z-score w.r.t. average of y, if 2, z-score each row of y independently
-        smooth    float = None, gaussian kernel std for smoothing over time, NOT IMPLEMENTED
+        zscore    int, if 1, z-score w.r.t. average of y, if 2, z-score each row of y independently, default is no normalization
+        polar     int, if given, data is expected to span a full circle, and can be either:
+                  - 1, `x[-1] + x[1] - x[0]` and `y[:,0]` are appended to `x` and `y` to close a circular plot
+                  - higher than 1, `polar-1` copies of `y` are appended, to plot multiple periods
+        smooth    float = None, gaussian kernel std for smoothing over time; if `polar` is given, circular smoothing is applied
         color     color = None
         mode      str = 'area' | 'error' | 'bar', plot 'ci' either as a shaded area, line with error bars, or bar plot
         alpha     float = 0.5, area transparency value (only for 'area' and 'bar' mode)
@@ -319,6 +362,7 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:bool|int=None, color:mplt.Co
     if y.size == 0:
         return
     zscore = 0 if zscore is None else int(zscore)
+    polar = 0 if polar is None else int(polar)
     if mode is None: mode = 'area' if y.shape[1] > 1 else 'error'
     if alpha is None: alpha = 0.5
     if lprop is None: lprop = {}
@@ -336,7 +380,7 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:bool|int=None, color:mplt.Co
         if y.shape[0] == 1:
             ci = lambda x : (x.flatten(), x.flatten())
         elif y.shape[0] < 500:
-            ci = lambda x : sp.stats.bootstrap((x,),np.mean,n_resamples=500,vectorized=True,paired=True).confidence_interval
+            ci = lambda x : sp.stats.bootstrap((x,),np.nanmean,n_resamples=500,vectorized=True,paired=True).confidence_interval
         else:
             ci = lambda x : (x.mean(axis=0) - x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]), x.mean(axis=0) + x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]))
     if ax is None:
@@ -363,6 +407,25 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:bool|int=None, color:mplt.Co
         y_line = (y_line - m) / s
         y_low = y_line - dy_low
         y_high = y_line + dy_high
+
+    if smooth is not None:
+        smooth_mode = 'wrap' if polar else 'reflect'
+        y_line = sp.ndimage.gaussian_filter1d(y_line, smooth, axis=0, mode=smooth_mode)
+        y_low = sp.ndimage.gaussian_filter1d(y_low, smooth, axis=0, mode=smooth_mode)
+        y_high = sp.ndimage.gaussian_filter1d(y_high, smooth, axis=0, mode=smooth_mode)
+
+    if polar == 1:
+        x = np.append(x, x[-1]+x[1]-x[0])
+        y_line = np.append(y_line, y_line[0])
+        y_low = np.append(y_low, y_low[0])
+        y_high = np.append(y_high, y_high[0])
+    elif polar > 1:
+        n_x = len(x)
+        for i in range(polar-1):
+            x = np.concatenate((x, x[-n_x:] + 2*np.pi))
+            y_line = np.concatenate((y_line, y_line[:n_x]))
+            y_low = np.concatenate((y_low, y_low[:n_x]))
+            y_high = np.concatenate((y_high, y_high[:n_x]))
 
     copy_color = aprop['color'] is None
     match mode:
@@ -435,29 +498,33 @@ def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=No
 
 
 def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axes=None):
-    # draw horizontal bars indicating significant differences between distributions
-    #
-    # arguments:
-    #     p        (n,3) float, each row is [i,j,pij], where pij is the p value for a test comparing i-th and j-th populations
-    #     x        (n,) float = range(n), x coordinates for populations
-    #     alpha    float = 0.05, false-discovery tolerance level
-    #     dy       float = 1, scale vertical distances between bars
-    #     draw     (4,) bool = [False,True,True,True], draw flags for [n.s., *, **, ***]
-    #     ax       matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    """draw horizontal bars indicating significant differences between distributions
+
+    arguments:
+        p        (n,3) float, each row is [i,j,pij], where pij is the p value for a test comparing i-th and j-th populations
+        x        (n,) float = range(n), x coordinates for populations
+        alpha    float = 0.05, false-discovery tolerance level
+        dy       float = 1, scale vertical distances between bars
+        draw     (4,) bool = [False,True,True,True], draw flags for [n.s., *, **, ***]
+        ax       matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    """
 
     p = np.array(p,ndmin=2)
+    if p.shape[1] != 3:
+        raise ValueError("'p' must have 3 columns")
+    indices = p[:,0:2].astype(int)
     x = np.arange(p.shape[0]) if x is None else np.asarray(x)
     if ax is None:
         ax = plt.gca()
     
     dx = np.diff(ax.get_xlim())[0] / 500
     y_lim = ax.get_ylim()
-    height = y_lim[1]
     dy = np.diff(y_lim)[0] / 30 * dy
+    height = y_lim[1] + dy
 
     # sort according to distance: nearby pairs first, then second neighbours and so on
-    distances = np.round(np.diff(x[p[:,0:2].astype(int)],axis=1).ravel(),10)
-    order = np.lexsort((x[p[:,0]],distances))
+    distances = np.round(np.diff(x[indices],axis=1).ravel(),10)
+    order = np.lexsort((x[indices[:,0]],distances))
     p = p[order]
 
     # significance level
