@@ -562,8 +562,17 @@ def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axe
     return
 
 
-def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None):
-    # p: (n_times, n_cond)
+def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None, **kwargs):
+    """draw a horizontal line indicating time points where time series passed a statistical test
+
+    arguments:
+        p           (t,c) bool, decision of a statistical test, t: number of time points, c: number of conditions
+        t           (t,) float = range(n), time points
+        dy          float, scale vertical distances between bars
+        color       color, line color
+        ax          matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+        **kwargs    all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
+    """
 
     p = np.asarray(p).astype(float)
     if p.ndim == 1:
@@ -587,7 +596,7 @@ def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None):
         if this_p.any():
             this_p[this_p==0] = np.nan
             this_p = np.stack((this_p,this_p))
-            ax.plot(t,this_p.ravel('F')*y,color=color[i])
+            ax.plot(t, this_p.ravel('F')*y, color=color[i], **kwargs)
             y = y + dy
 
     return
