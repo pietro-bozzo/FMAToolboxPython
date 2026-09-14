@@ -2,7 +2,6 @@
 
 import fmatoolbox
 import numpy as np
-import numpy.typing as npt
 import matplotlib.axes as mpla
 import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
@@ -10,10 +9,12 @@ import matplotlib.typing as mplt
 import scipy as sp
 from collections.abc import Iterable, Collection, Sequence
 from typing import Literal, Callable
+from matplotlib.axes import Axes
+from numpy.typing import ArrayLike
 from os import PathLike
 
 
-def adjustAxes(axs:mpla.Axes|Iterable[mpla.Axes], format:Literal['paper','poster']='paper'):
+def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'):
     # adjust axes properties to improve figure appearance
     #
     # arguments:
@@ -80,7 +81,7 @@ def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[
     return fig, axs
 
 
-def setProp(axs:mpla.Axes|Iterable[mpla.Axes], xlabelcolor:dict[int,mplt.ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
+def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,mplt.ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
     # set multiple axes properties at once
     #
     # arguments:
@@ -158,7 +159,7 @@ def setCLim(im:Collection,vmin:float|Sequence[float]=None,vmax:float|Sequence[fl
     return
 
 
-def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:mpla.Axes=None, **kwargs):
+def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:Axes=None, **kwargs):
     """wrapper around `matplotlib.pyplot.plot` with extra functionalities
 
     arguments:
@@ -196,7 +197,7 @@ def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:mpla.Axes=
     return ax.plot(*args, **kwargs)
 
 
-def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None):
+def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
     # plot columns of 'data', interpreting the first as the x axis and all others as y values
 
     data = np.array(data,ndmin=2)
@@ -222,8 +223,8 @@ def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, a
     return
 
 
-def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:npt.NDArray[np.floating]|Callable|str=None,
-                 sortax:int=None, xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:float=None, bar:str=None, ax:mpla.Axes=None):
+def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:ArrayLike|Callable|str=None,
+                 sortax:int=None, xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:float=None, bar:str=None, ax:Axes=None):
     """plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
@@ -242,8 +243,12 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
         alpha           float | (n,m) float = None, transparency mask for `data` (e.g., to show significance of pixels), values must be in [0,1]
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
         aspect          float = 3/4, image aspect ratio
-        bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`
+        bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+
+    output:
+        im              image
+        cb              colorbar, optional
     """
 
     data = np.array(data,ndmin=2)
@@ -302,7 +307,7 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
     if alpha is not None:
         im.set_alpha(alpha)
     if bar is not None:
-        plt.colorbar(im,label=bar,ax=ax)
+        cb = plt.colorbar(im,label=bar,ax=ax)
 
     # plot peaks
     if sortby == 'peak-show':
@@ -313,11 +318,13 @@ def plotColorMap(data:npt.NDArray[np.floating], vmin:float=None, vmax:float=None
             peaks = peaks if y is None else y[peaks]
             ax.plot(x,np.sort(peaks),color='r')
 
+    if bar is not None:
+        return im, cb
     return im
 
 
 def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None, color:mplt.ColorType=None, mode:Literal['area','error','bar']=None,
-            alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:mpla.Axes=None):
+            alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:Axes=None):
     """plot mean +/- confidence intervals of matrix data
 
     arguments:
@@ -443,7 +450,7 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
     return
 
 
-def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=None):
+def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
     """ draw box plots for groups of data
     note: calls matplotlib's boxplot, which sets xticks
 
@@ -497,23 +504,24 @@ def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:mpla.Axes=No
     return
 
 
-def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axes=None):
-    """draw horizontal bars indicating significant differences between distributions
+def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Sequence[bool]=(False,True,True,True),
+         ax:Axes=None) -> None:
+    """plot horizontal bars and asterisks indicating significant differences between distributions
 
-    arguments:
-        p        (n,3) float, each row is [i,j,pij], where pij is the p value for a test comparing i-th and j-th populations
-        x        (n,) float = range(n), x coordinates for populations
-        alpha    float = 0.05, false-discovery tolerance level
-        dy       float = 1, scale vertical distances between bars
-        draw     (4,) bool = [False,True,True,True], draw flags for [n.s., *, **, ***]
-        ax       matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    Args:
+        p:      (n,3) float array, each row is [i,j,pij], where pij is the p value for a test comparing i-th and j-th populations
+        x:      (n,) float array, x coordinates for populations, defaults to range(n)
+        alpha:  false-discovery tolerance level, defaults to 0.05
+        dy:     scale vertical distances between bars, defaults to 1
+        draw:   draw flags for [n.s., *, **, ***], defaults to (False,True,True,True)
+        ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
     """
 
     p = np.array(p,ndmin=2)
     if p.shape[1] != 3:
         raise ValueError("'p' must have 3 columns")
     indices = p[:,0:2].astype(int)
-    x = np.arange(p.shape[0]) if x is None else np.asarray(x)
+    x = np.arange(p.shape[0]) if x is None else np.array(x,ndmin=1)
     if ax is None:
         ax = plt.gca()
     
@@ -537,32 +545,34 @@ def pBar(p, x = None, alpha=0.05, dy=1, draw=(False,True,True,True), ax:mpla.Axe
 
     lw = ax.spines["left"].get_linewidth()
     fontsz = ax.xaxis.label.get_fontsize() * .8
-    def _plot_line(ax, x, y, dy, p, last_p, t):
+    def _plot_line(ax, x, y, dy, p, last_p, t, single):
         if last_p > p[0]: # increase height not to overlap lines
             y = y + dy*3.5
-        ax.plot([x[0],x[0],x[1],x[1]],[y-dy,y,y,y-dy],color='k',lw=lw)
+        if not single:
+            ax.plot([x[0],x[0],x[1],x[1]],[y-dy,y,y,y-dy],color='k',lw=lw)
         ax.text(np.mean(x),y+0.8*dy,t,ha='center',va='center',color='k',size=fontsz)
         last_p = p[1]
         return y, last_p
 
     last_i = -np.inf
     for i in range(len(p)):
+        single = p[i,0] == p[i,1] # if True, plot only stars (single population)
         x_coord = [x[int(p[i,0])]+dx, x[int(p[i,1])]-dx]
         if h[i] == 3 and draw[3]:
-            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'***')
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'***',single)
         elif h[i] >= 2 and draw[2]:
-            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'**')
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'**',single)
         elif h[i] >= 1 and draw[1]:
-            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'*')
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'*',single)
         elif h[i] == 0 and draw[0]:
-            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'n. s.')
+            height, last_i = _plot_line(ax,x_coord,height,dy,p[i,0:2],last_i,'n. s.',single)
 
     ax.set_ylim(y_lim[0],height+dy*5)
 
     return
 
 
-def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None, **kwargs):
+def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:Axes=None, **kwargs):
     """draw a horizontal line indicating time points where time series passed a statistical test
 
     arguments:
@@ -602,7 +612,7 @@ def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:mpla.Axes=None, 
     return
 
 
-def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=None, ax:Axes=None, **plot_kwargs):
 
     intervals = fmatoolbox.general.consolidateIntervals(intervals)
     if intervals.size == 0:
@@ -616,7 +626,7 @@ def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=N
 
 
 def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None,
-            norm:Literal['density','max','cdf']=None, color:mplt.ColorType=None, alpha:float=None, label=None, ax:mpla.Axes=None, **plot_kwargs):
+            norm:Literal['density','max','cdf']=None, color:mplt.ColorType=None, alpha:float=None, label=None, ax:Axes=None, **plot_kwargs):
     """estimate and plot probability density function (PDF) of data
 
     arguments:
@@ -683,7 +693,7 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
     return grid, density
 
 
-def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, height:float=None, ax:mpla.Axes=None, **plot_kwargs):
+def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, height:float=None, ax:Axes=None, **plot_kwargs):
 
     if height is None: height = 1
 
