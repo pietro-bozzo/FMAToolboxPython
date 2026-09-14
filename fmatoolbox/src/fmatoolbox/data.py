@@ -9,8 +9,8 @@ import traceback
 import re
 import fmatoolbox.exceptions
 import collections
-import concurrent.futures
 import xml.etree.ElementTree
+import loky
 from typing import Any, Callable
 from os import PathLike
 
@@ -562,22 +562,24 @@ def _batchWorker(payload):
 
 
 def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=None, rnd_seed:str=None, kwargs:dict|list[dict]=None, ignore_args:bool=False,
-             sessions:list[int]=None, parallel:bool|int=False, verbose:bool=True) -> tuple[list, ...]:
-    # run a routine on multiple sessions
-    #
-    # arguments:
-    #     batch_file     string, path to batch file
-    #     func           function to call for each session, must take session path as first arg
-    #     args           list of list = [[]], positional arguments for 'func', one per session or a single list for all
-    #     rnd_seed       str = None, if given, spawn numpy random seeds, passed to 'func' as keyword argument, necessary to use np.random with 'parallel'
-    #     kwargs         list of dict = [{}], keyword arguments for 'func', a dict per session or one for all
-    #     ignore_args    bool = False, if True, ignore extra arguments from batch file
-    #     sessions       (:) int = None, indices of session to process (default is all sessions from batch file)
-    #     parallel       bool | int = False, parallelize calls of `func` with concurrent.futures
-    #     verbose:       bool = True, log progress
-    #        
-    # output:
-    #     variable outputs matching func's signature
+             sessions:list[int]=None, parallel:bool|int=None, verbose:bool=None) -> tuple[list, ...]:
+    """run a routine on multiple sessions
+
+    Args:
+        batch_file:     path to batch file
+        func:           callable to call for each session, must take session path as first argument
+        args:           optional positional arguments for `func`, a list of lists (one per session) or a single list applied to all
+        rnd_seed:       name of a keyword argument passed to `func`, holding a spawned numpy random seed, useful when random numbers
+                        are generated in `func` and `parallel` = True, defaults to no seeding
+        kwargs:         optional keyword arguments for `func`, a dict per session or one applied to all
+        ignore_args:    if True, ignore extra arguments from batch file, defaults to False
+        sessions:       indices of session to process, defaults to all sessions from batch file
+        parallel:       if True, parallelize calls of `func` with ``loky.get_reusable_executor``, if int, it also specifies
+                        the number of workers, defaults to no parallelization
+        verbose:        if True, log progress, defaults to True
+    Returns:
+        variable outputs matching `func`'s signature
+    """
     
     # parse batch file
     sessions_list, extra_args = readBatchFile(batch_file)
@@ -641,7 +643,7 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
         payloads = [(i,func,s,args[i],extra_args[i],kwargs[i],seeds[i]) for i, s in enumerate(sessions_list)]
         if parallel is True:
             parallel = None # to keep default max_workers
-        with concurrent.futures.ProcessPoolExecutor(max_workers=parallel) as ex:
+        with loky.get_reusable_executor(max_workers=parallel) as ex:
             for i, result in ex.map(_batchWorker, payloads):
                 if i >= 0:
                     results[i] = result
