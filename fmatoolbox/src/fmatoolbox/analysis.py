@@ -788,4 +788,3 @@ def maxStatisticTest(data, surrogate, statistic=None, group=None, alpha:float=0.
    else:
        raise ValueError("'alternative' must be 'two-sided', 'greater' or 'less'")
 
-   return p < alpha
