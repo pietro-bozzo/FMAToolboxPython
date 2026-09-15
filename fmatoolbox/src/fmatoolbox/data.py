@@ -580,6 +580,8 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
     Returns:
         variable outputs matching `func`'s signature
     """
+
+    if verbose is None: verbose = True
     
     # parse batch file
     sessions_list, extra_args = readBatchFile(batch_file)
