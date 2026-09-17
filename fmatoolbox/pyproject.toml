@@ -17,6 +17,7 @@ dependencies = [
     "scipy",
     "matplotlib",
     "statsmodels",
+    "loky",
 ]
 
 [project.optional-dependencies]
