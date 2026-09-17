@@ -791,17 +791,19 @@ def maxStatisticTest(data, surrogate, statistic=None, group=None, alpha:float=0.
    return p < alpha
 
 
-
-def clusterPermutationTest(data1, data2, paired:bool=False, n_perm:int=1000, alpha:float=0.05, tail:Literal['both','right','left']='both',
+def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000, alpha:float=0.05, tail:Literal['both','right','left']='both',
                             cluster_stat:Literal['size','mass']='size'):
-    ''' perform a cluster-based permutation test to compare two groups of time series data, correcting for
-    multiple comparisons while accounting for temporal correlation between adjacent time points
+    """perform a cluster-based permutation test on time series data, either to test one sample against zero, or to compare
+    two samples, correcting for multiple comparisons while accounting for temporal correlations
 
     arguments:
         data1           (n1,T) float, first group's data, e.g., z-scored PETH
-        data2           (n2,T) float, second group's data, must have the same number of columns as 'data1', and, if 'paired' is True,
-                        the same number of rows too
-        paired          bool = False, if True, run a paired test
+        data2           optional, either:
+                        - None, to test data1 against zero
+                        - a scalar float, to test data1-data2 against zero
+                        - (n2,T) float, second group's data, must have the same number of columns as 'data1', and, if 'paired'
+                        is True, the same number of rows too
+        paired          bool = False, if True, run a paired test (ignored if data2 is None or scalar)
         n_perm          int = 1000, number of permutations used to build the null distribution of the maximum cluster statistic
         alpha           float = 0.05, significance level, used both to threshold time points into clusters and to test clusters' significance
         tail            str = {'both','right','left'}, test direction
@@ -819,19 +821,23 @@ def clusterPermutationTest(data1, data2, paired:bool=False, n_perm:int=1000, alp
                                  of non-NaN observations)
 
     notes:
-        - t points thresholded at critical thrs for 'alpha' (uncorrected) to form clusters; a null distribution for the maximum
-          cluster statistic is then built by permutation (sign-flip if 'paired', else label-shuffle) and used to assign every observed
-          cluster a corrected p value, following Maris & Oostenveld (2007)
-        - suited for temporally correlated data
-    '''
+        t points thresholded at critical thrs for 'alpha' (uncorrected) to form clusters; a null distribution for the maximum
+        cluster statistic is then built by permutation (sign-flip if 'paired', else label-shuffle) and used to assign every observed
+        cluster a corrected p value, following Maris & Oostenveld (2007)
+    """
 
+    # validate input
     if tail not in ('both','right','left'):
         raise ValueError("'tail' must be 'both', 'right' or 'left'")
     if cluster_stat not in ('size','mass'):
         raise ValueError("'cluster_stat' must be 'size' or 'mass'")
 
-    data1 = np.asarray(data1,dtype=float)
-    data2 = np.asarray(data2,dtype=float)
+    data1 = np.array(data1, dtype=float, ndmin=2)
+    data2 = np.array(0., ndmin=2) if data2 is None else np.array(data2, dtype=float, ndmin=2)
+    if data2.size == 1:
+        # one-sample case
+        paired = True
+        data2 = np.full_like(data1, data2.item())
     n1, T = data1.shape
     n2, T2 = data2.shape
     if T != T2:
@@ -839,114 +845,80 @@ def clusterPermutationTest(data1, data2, paired:bool=False, n_perm:int=1000, alp
     if paired and n1 != n2:
         raise ValueError("a paired test requires 'data1' and 'data2' to have the same number of rows")
 
-    rng = np.random.default_rng()
+    # 1. define functions used to compute statistics
 
-    # observed statistic (t-test)
+    # statitic computed per time point
+    def statistic(x,y=None):
+        if paired:
+            # one-sample t-test, 'x' is a difference
+            n = np.sum(~np.isnan(x), axis=0)
+            mu = np.nanmean(x, axis=0)
+            sigma = np.nanstd(x, axis=0, ddof=1)
+            stat = mu / (sigma / np.sqrt(n))
+            df = n - 1
+        else:
+            # two-samples t-test
+            # NOTE: could replace Student's t-statistic with Welch's t-statistic to drop equal variance assumption
+            n1t = np.sum(~np.isnan(x), axis=0);    n2t = np.sum(~np.isnan(y), axis=0)
+            mu1 = np.nanmean(x, axis=0);           mu2 = np.nanmean(y, axis=0)
+            s1 = np.nanstd(x, axis=0, ddof=1);     s2 = np.nanstd(y, axis=0, ddof=1)
+            pooled = np.sqrt(((n1t-1) * s1 ** 2 + (n2t-1) * s2 ** 2) / (n1t+n2t-2))
+            stat = (mu1 - mu2) / (pooled * np.sqrt(1/n1t + 1/n2t))
+            df = n1t + n2t - 2
+        return stat, df
+
+    # cluster statistics
+    def cluster(s,thr):
+        if tail == 'both':
+            sig = np.abs(s) > thr
+        elif tail == 'right':
+            sig = s > thr
+        else: # 'left'
+            sig = s < -thr
+        # find clusters
+        clusters, n_clusters = sp.ndimage.label(sig)
+        if n_clusters:
+            if cluster_stat == 'size':
+                cluster_stats = np.bincount(clusters)[1:]  # exclude background label 0
+            else:  # 'mass'
+                cluster_stats = np.bincount(clusters, weights=np.abs(s))[1:]
+        else:
+            cluster_stats = np.empty(0)
+        return clusters, n_clusters, cluster_stats
+
+    # prepare data
     if paired:
-        diff_data = data1 - data2
-        n = np.sum(~np.isnan(diff_data),axis=0)
-        mu = np.nanmean(diff_data,axis=0)
-        sigma = np.nanstd(diff_data,axis=0,ddof=1)
-        stat = mu / (sigma / np.sqrt(n))
-        df = n - 1
+        data_diff = data1 - data2 # run test on the difference
     else:
-        n1t = np.sum(~np.isnan(data1),axis=0)
-        n2t = np.sum(~np.isnan(data2),axis=0)
-        mu1 = np.nanmean(data1,axis=0)
-        mu2 = np.nanmean(data2,axis=0)
-        s1 = np.nanstd(data1,axis=0,ddof=1)
-        s2 = np.nanstd(data2,axis=0,ddof=1)
-        pooled = np.sqrt(((n1t-1)*s1**2 + (n2t-1)*s2**2) / (n1t+n2t-2))
-        stat = (mu1 - mu2) / (pooled * np.sqrt(1/n1t + 1/n2t))
-        df = n1t + n2t - 2
+        combined = np.concatenate((data1,data2), axis=0) # used for permutations later
 
+    # 2. observed statistic
+    stat, df = statistic(data_diff) if paired else statistic(data1,data2)
     # threshold for clustering, 'thresh' and 'df' vary over time with the number of non-NaN observations
-    if tail == 'both':
-        thresh = sp.stats.t.ppf(1 - alpha/2,df)
-        sig = np.abs(stat) > thresh
-    elif tail == 'right':
-        thresh = sp.stats.t.ppf(1 - alpha,df)
-        sig = stat > thresh
-    else: # 'left'
-        thresh = sp.stats.t.ppf(1 - alpha,df)
-        sig = stat < -thresh
+    thresh = sp.stats.t.ppf(1-alpha/2,df) if tail == 'both' else sp.stats.t.ppf(1-alpha,df)
+    clusters, n_clusters, cluster_stats = cluster(stat,thresh)
 
-    # find clusters
-    clusters, n_clusters = sp.ndimage.label(sig)
-    if n_clusters:
-        if cluster_stat == 'size':
-            cluster_stats = np.bincount(clusters)[1:] # exclude background label 0
-        else: # 'mass'
-            cluster_stats = np.bincount(clusters,weights=np.abs(stat))[1:]
-    else:
-        cluster_stats = np.empty(0)
-
-    # permutation testing: build null distribution of the maximum cluster statistic
+    # 3. surrogate statistic: build null distribution of the maximum cluster statistic
+    rng = np.random.default_rng()
     max_cluster_perm = np.empty(n_perm)
-    if paired:
-        # sign-flip permutation
-        for i in range(n_perm):
+    for i in range(n_perm):
+        if paired:
+            # sign-flip permutation
             signs = rng.choice((-1,1),size=(n1,1)) # random sign per row, applied to its entire time series
-            perm_data = diff_data * signs
-            mu_p = np.nanmean(perm_data,axis=0)
-            sigma_p = np.nanstd(perm_data,axis=0,ddof=1)
-            n_p = np.sum(~np.isnan(perm_data),axis=0)
-            stat_perm = mu_p / (sigma_p / np.sqrt(n_p))
-
-            if tail == 'both':
-                sig_perm = np.abs(stat_perm) > thresh
-            elif tail == 'right':
-                sig_perm = stat_perm > thresh
-            else:
-                sig_perm = stat_perm < -thresh
-
-            clust_perm, n_cp = sp.ndimage.label(sig_perm)
-            if n_cp:
-                if cluster_stat == 'size':
-                    perm_cluster_stats = np.bincount(clust_perm)[1:]
-                else:
-                    perm_cluster_stats = np.bincount(clust_perm,weights=np.abs(stat_perm))[1:]
-                max_cluster_perm[i] = perm_cluster_stats.max()
-            else:
-                max_cluster_perm[i] = 0
-    else:
-        combined = np.concatenate((data1,data2),axis=0)
-        for i in range(n_perm):
+            perm_data = data_diff * signs
+            stat_perm, _ = statistic(perm_data)
+        else:
             # label-shuffle permutation
             perm_idx = rng.permutation(n1 + n2)
-            grp1 = combined[perm_idx[:n1]]
-            grp2 = combined[perm_idx[n1:]]
+            stat_perm, _ = statistic(combined[perm_idx[:n1]], combined[perm_idx[n1:]])
+        # surrogate cluster statistics
+        clust_perm, n_cp, perm_cluster_stats = cluster(stat_perm,thresh)
+        max_cluster_perm[i] = perm_cluster_stats.max() if n_cp else 0
 
-            mu1_p = np.nanmean(grp1,axis=0)
-            mu2_p = np.nanmean(grp2,axis=0)
-            s1_p = np.nanstd(grp1,axis=0,ddof=1)
-            s2_p = np.nanstd(grp2,axis=0,ddof=1)
-            n1_p = np.sum(~np.isnan(grp1),axis=0)
-            n2_p = np.sum(~np.isnan(grp2),axis=0)
-            pooled_p = np.sqrt(((n1_p-1)*s1_p**2 + (n2_p-1)*s2_p**2) / (n1_p+n2_p-2))
-            stat_perm = (mu1_p - mu2_p) / (pooled_p * np.sqrt(1/n1_p + 1/n2_p))
-
-            if tail == 'both':
-                sig_perm = np.abs(stat_perm) > thresh
-            elif tail == 'right':
-                sig_perm = stat_perm > thresh
-            else:
-                sig_perm = stat_perm < -thresh
-
-            clust_perm, n_cp = sp.ndimage.label(sig_perm)
-            if n_cp:
-                if cluster_stat == 'size':
-                    perm_cluster_stats = np.bincount(clust_perm)[1:]
-                else:
-                    perm_cluster_stats = np.bincount(clust_perm,weights=np.abs(stat_perm))[1:]
-                max_cluster_perm[i] = perm_cluster_stats.max()
-            else:
-                max_cluster_perm[i] = 0
-
-    # cluster p values and significance mask
+    # 4. cluster p-values and significance mask
     if n_clusters:
         p_cluster = MCpValue(np.tile(max_cluster_perm,(n_clusters,1)).T,cluster_stats,'greater')
-        sig_mask = np.isin(clusters,np.where(p_cluster < alpha)[0] + 1)
+        sig_mask = np.isin(clusters, np.where(p_cluster < alpha)[0] + 1)
     else:
         p_cluster = np.empty(0)
         sig_mask = np.zeros(T,dtype=bool)
