@@ -588,7 +588,7 @@ def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:Axes=None, **kwa
     if p.ndim == 1:
         p = p.reshape(-1,1)
     if t is None:
-        t = range(p.shape[0])
+        t = np.arange(p.shape[0])
     else:
         t = np.array(t)
     if ax is None:
