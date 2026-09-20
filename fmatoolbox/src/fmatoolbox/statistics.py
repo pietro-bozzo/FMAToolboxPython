@@ -1,44 +1,43 @@
 """Specialized statistics routines"""
 
-import fmatoolbox.general
 import numpy as np
 import scipy as sp
 import statsmodels.stats.multitest
 from typing import Literal
 
 
-def MCpValue(surrogate,observed,alternative='two-sided'):
+def MCpValue(surrogate,observed,alternative:Literal['two-sided','greater','less']=None):
     """compute Monte Carlo p-values comparing observed statistics to surrogate distributions
 
-    arguments:
-        surrogate      (s,f,...) float, surrogate statistics; s: n of surrogates, f: n of features
-        observed       (f,...) float, observed statistics, must have shape equal to surrogate.shape[1:]
-        alternative    str = {"two-sided", "greater", "less"}, test direction
+    Args:
+        surrogate:     surrogate statistics, first dimension corresponds to surrogate replicates
+        observed:      observed statistics, must have shape equal to `surrogate.shape[1:]`
+        alternative:   test direction
 
-    output:
-        pvals          (f,) float, Monte Carlo p-values
+    Returns:
+        pvals:         Monte Carlo p-values, same shape as `observed`
     """
 
+    if alternative is None: alternative = 'two-sided'
     surrogate = np.asarray(surrogate)
     observed = np.asarray(observed)
-    if np.any(surrogate.shape[1:] != observed.shape):
+    if surrogate.shape[1:] != observed.shape:
         raise ValueError("'surrogate' must have the same shape of 'observed', except for the first dimension")
 
     if alternative == "greater":
         count = np.sum(surrogate >= observed, axis=0)
-
     elif alternative == "less":
         count = np.sum(surrogate <= observed, axis=0)
-
     elif alternative == "two-sided":
         greater = np.sum(surrogate >= observed, axis=0)
         less = np.sum(surrogate <= observed, axis=0)
-        count = 2 * np.minimum(greater, less)
-
+        count = 2 * (np.minimum(greater,less) + 1) - 1 # so that later (count+1) = 2*(min+1)
     else:
         raise ValueError("alternative must be 'greater', 'less', or 'two-sided'")
 
-    pvals = (count + 1) / (surrogate.shape[0] + 1) # +1 implement finite-sample Monte Carlo correction
+    n = np.sum(~np.isnan(surrogate), axis=0)
+    pvals = (count + 1) / (n + 1) # +1 implement finite-sample Monte Carlo correction (Phipson & Smyth 2010, CHECK REF)
+    pvals = np.where(n==0, np.nan, pvals) # all-NaN feature have no p-value
 
     return np.minimum(pvals, 1.0)
 
