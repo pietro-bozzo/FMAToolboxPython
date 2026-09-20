@@ -5,3 +5,4 @@ from . import intervals
 from . import plotting
 from . import preprocess
 from . import regions
+from . import statistics
