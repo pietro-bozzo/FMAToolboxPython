@@ -450,20 +450,21 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
     return
 
 
-def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
+def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
     """ draw box plots for groups of data
     note: calls matplotlib's boxplot, which sets xticks
 
     arguments:
         data
         x
+        mode:     either 'box' or 'violin', default is 'box'
         color     color = None
         label     str = None, legend label for line
         ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
     """
 
-    if ax is None:
-        ax = plt.gca()
+    if mode is None: mode = 'box'
+    if ax is None: ax = plt.gca()
 
     # remove nans
     if isinstance(data,np.ndarray):
@@ -481,27 +482,34 @@ def boxPlot(data, x=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
     except:
         pass
 
-    lw = ax.spines["left"].get_linewidth() * 0.8
-    mksz = ax.spines["left"].get_linewidth() * 2
-    medianprops = {'linewidth': lw}
-    boxprops = {'linewidth': lw}
-    flierprops={'marker':'.', 'markerfacecolor': 'black', 'markersize': mksz}
+    if mode == 'box':
+        lw = ax.spines["left"].get_linewidth() * 0.8
+        mksz = ax.spines["left"].get_linewidth() * 2
+        medianprops = {'linewidth': lw}
+        boxprops = {'linewidth': lw}
+        flierprops = {'marker': '.','markerfacecolor': 'black','markersize': mksz}
 
-    bp = ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},capprops={'linewidth':lw},flierprops=flierprops)
-    if color is not None:
+        bp = ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
+                        capprops={'linewidth':lw},flierprops=flierprops)
         for box, col in zip(bp["boxes"],color):
             r, g, b, a = mplc.to_rgba(col)
             boxprops['facecolor'] = (r, g, b, a * 0.2)
             box.set(facecolor=(r, g, b, a*0.2),edgecolor=col)
         for median, col in zip(bp['medians'],color):
             median.set_color(col)
+    else:
+        facecolor = []
+        for col in color:
+            r, g, b, a = mplc.to_rgba(col)
+            facecolor.append((r,g,b,a*0.5))
+        bp = ax.violinplot(data,positions=x,facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
 
     if label is not None:
         if x is None:
             x = np.arange(1,len(label)+1)
         ax.set_xticks(x,label)
 
-    return
+    return bp
 
 
 def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Sequence[bool]=(False,True,True,True),
