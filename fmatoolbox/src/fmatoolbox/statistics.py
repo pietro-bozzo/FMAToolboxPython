@@ -1,10 +1,10 @@
-''' Specialized statistics routines '''
+"""Specialized statistics routines"""
 
 import fmatoolbox.general
 import numpy as np
 import scipy as sp
 import statsmodels.stats.multitest
-from typing import Literal, Callable
+from typing import Literal
 
 
 def MCpValue(surrogate,observed,alternative='two-sided'):
@@ -134,34 +134,33 @@ def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000
     """perform a cluster-based permutation test on time series data, either to test one sample against zero, or to compare
     two samples, correcting for multiple comparisons while accounting for temporal correlations
 
-    arguments:
-        data1           (n1,T) float, first group's data, e.g., z-scored PETH
-        data2           optional, either:
-                        - None, to test data1 against zero
-                        - a scalar float, to test data1-data2 against zero
-                        - (n2,T) float, second group's data, must have the same number of columns as 'data1', and, if 'paired'
-                        is True, the same number of rows too
-        paired          bool = False, if True, run a paired test (ignored if data2 is None or scalar)
-        n_perm          int = 1000, number of permutations used to build the null distribution of the maximum cluster statistic
-        alpha           float = 0.05, significance level, used both to threshold time points into clusters and to test clusters' significance
-        tail            str = {'both','right','left'}, test direction
-        cluster_stat    str = {'size','mass'}, statistic used to quantify a cluster: 'size' = number of time points (more robust when
-                        a cluster's effect is driven by a few extreme values), 'mass' = sum of abs('stat') across its time points
+    Args:
+        data1:           first group's data, shape (n_samples1, times), e.g., z-scored PETH
+        data2:           optional, either:
+                         - None, to test `data1` against zero
+                         - a scalar float, to test `data1-data2` against zero
+                         - a (n_samples2, times) float array, second group's data, must have the same number of columns as `data1`, and,
+                           if `paired` is True, the same number of rows too
+        paired:          if True, run a paired test, ignored if `data2` is None or scalar, defaults to False
+        n_perm:          number of permutations used to build the null distribution of the maximum cluster statistic, defaults to 1000
+        alpha:           significance level, used both to threshold time points into clusters and to test clusters' significance, defaults to 0.05
+        tail:            test direction, one of 'both', 'right', 'left'
+        cluster_stat:    statistic used to quantify a cluster, one of 'size' (number of time points, more robust when a cluster's effect
+                         is driven by a few extreme values) or 'mass' (sum of `abs(stat)` across its time points)
 
-    output:
-        stats    dict with fields:
-                 'stat'          (T,) float, observed t-statistic at every time point
-                 'clusters'      (T,) int, cluster id at every time point (0 = not part of any cluster), as returned by `scipy.ndimage.label`
-                 'cluster_stat'  (n_clusters,) float, observed 'cluster_stat' statistic for every cluster, in the same order as cluster ids
-                 'p_cluster'     (n_clusters,) float, Monte Carlo p value for every cluster
-                 'sig_mask'      (T,) bool, True at time points belonging to a cluster with 'p_cluster' < 'alpha'
-                 'threshold'     (T,) float, critical t value used to threshold time points into clusters (varies over time with the number
-                                 of non-NaN observations)
+    Returns:
+        dict with fields:
+            stat:           observed t-statistic at every time point, shape (times,)
+            clusters:       cluster id at every time point, 0 = not part of any cluster, as returned by ``scipy.ndimage.label``, shape (times,)
+            cluster_stat:   observed `cluster_stat` statistic for every cluster, in the same order as cluster ids, shape (n_clusters,)
+            p_cluster:      monte carlo p value for every cluster, shape (n_clusters,)
+            sig_mask:       True at time points belonging to a cluster with `p_cluster` < `alpha`, shape (times,)
+            threshold:      critical t value used to threshold time points into clusters, varies over time with the number of
+                            non-NaN observations, shape (times,)
 
-    notes:
-        t points thresholded at critical thrs for 'alpha' (uncorrected) to form clusters; a null distribution for the maximum
-        cluster statistic is then built by permutation (sign-flip if 'paired', else label-shuffle) and used to assign every observed
-        cluster a corrected p value, following Maris & Oostenveld (2007)
+    Note:
+        a null distribution for the maximum cluster statistic is built by permutation (sign-flip if 'paired', else label-shuffle)
+        and used to assign every observed cluster a corrected p value, following Maris & Oostenveld (2007)
     """
 
     # validate input
@@ -264,93 +263,54 @@ def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000
     return {'stat':stat, 'clusters':clusters, 'cluster_stat':cluster_stats, 'p_cluster':p_cluster, 'sig_mask':sig_mask, 'threshold':thresh}
 
 
-def hierarchicalBootsrap(x, groupx, y=None, groupy=None, paired=False, n_iter=1000):
-    """hierarchical bootstrap for nested/grouped observations
+def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter=1000):
+    """hierarchical bootstrap for nested grouped observations
+    at each level groups are sampled with replacement, and so are observations at the lowest level
 
-    arguments:
-    x : np.ndarray, shape (n_samples_x, n_features)
-        Data for condition X.
+    Args:
+        x:         data for condition X, shape (n_samples_x, n_features)
+        groupx:    hierarchical grouping variables for X, shape (n_samples_x, n_groups), columns ordered from lowest to highest level,
+                   e.g. groupx[:,0] = trial, groupx[:,1] = subject, giving the hierarchy: subject -> trial -> observations
+        y:         optional data for condition Y, shape (n_samples_y, n_features), if None only X is bootstrapped
+        groupy:    optional grouping variables corresponding to `y`, shape (n_samples_y, n_groups)
+        paired:    number of paired levels treated as a repeated-measures comparison, counting from the top; groups at those levels are sampled
+                   jointly so they occur in both conditions, requiring common group identifiers in `groupx` and `groupy`, defaults to 0
+        n_iter:    number of bootstrap iterations, defaults to 1000
 
-    groupx : np.ndarray, shape (n_samples_x, n_groups)
-        Hierarchical grouping variables for X.
-
-        Columns should be ordered from lowest to highest level.
-        For example:
-
-            groupx[:, 0] = trial
-            groupx[:, 1] = subject
-
-        Thus the hierarchy is:
-
-            subject -> trial -> observations
-
-    y : np.ndarray, optional, shape (n_samples_y, n_features)
-        Data for condition Y. If None, only X is bootstrapped.
-
-    groupy : np.ndarray, optional, shape (n_samples_y, n_groups)
-        Grouping variables corresponding to y.
-
-    paired : (n_groups,) bool, default=False
-        If True, X and Y are treated as a paired/repeated-measures comparison. Groups at the highest common level are sampled
-        jointly so that the same subjects occur in both conditions. This requires a common highest-level group identifier in groupx and groupy.
-
-    n_iter : int, default=1000
-        Number of bootstrap iterations.
-
-    Returns
-    -------
-    result : np.ndarray
-        If y is None:
-
-            shape (n_iter, n_features)
-
-            Bootstrap distribution of the mean of X.
-
-        If y is given:
-
-            shape (n_iter, 3, n_features)
-
-            result[:, 0, :] = bootstrap means of X
-            result[:, 1, :] = bootstrap means of Y
-            result[:, 2, :] = X - Y
-
-    Notes
-    -----
-    The bootstrap is hierarchical:
-
-        highest-level group
-            -> next grouping level
-                -> ...
-                    -> individual observations
-
-    At each level, groups are sampled with replacement, and at the
-    lowest level individual observations are sampled with replacement.
-
-    NaNs are ignored when calculating means.
+    Returns:
+        means:     bootstrap distribution of the data mean, ignoring nans, shape depends on whether `y` is:
+                   - None, shape (n_iter, n_features) giving the bootstrap distribution of the mean of X
+                   - given, shape (n_iter, n_features, 3), with the last dimension being X, Y, X - Y
+        p_value:   p values for the following tests: "mean of X is 0" and, optionally, "mean of Y is 0", "mean of X - Y is 0";
+                   shape is either (n_features,) or (n_features,3)
+        ci:        confidence intervals for `means`, shape is either (2, n_features) or (2, n_features, 3)
     """
 
     # validate input
     x = np.asarray(x, dtype=float)
     groupx = np.asarray(groupx)
-    if x.ndim == 1:
-        x = x[:,None]
-    if groupx.ndim == 1:
-        groupx = groupx[:,None]
+    if x.ndim == 1:         x = x[:,None]
+    if groupx.ndim == 1:    groupx = groupx[:,None]
+    n_levels = groupx.shape[1]
     if x.shape[0] != groupx.shape[0]:
-        raise ValueError("'x' and 'groupx' must have the same number of samples")
+        raise ValueError("'x' and 'groupx' must have the same number of samples (rows)")
     if y is not None:
+        if groupy is None:
+            raise ValueError("'groupy' must be given when 'y' is given")
         y = np.asarray(y, dtype=float)
         groupy = np.asarray(groupy)
-        if y.ndim == 1:
-            y = y[:,None]
-        if groupy.ndim == 1:
-            groupy = groupy[:,None]
+        if y.ndim == 1:         y = y[:,None]
+        if groupy.ndim == 1:    groupy = groupy[:,None]
         if y.shape[0] != groupy.shape[0]:
-            raise ValueError("'y' and 'groupy' must have the same number of samples")
+            raise ValueError("'y' and 'groupy' must have the same number of samples (rows)")
         if x.shape[1] != y.shape[1]:
-            raise ValueError("'x' and 'y' must have the same number of features")
-        if groupx.shape[1] != groupy.shape[1]:
-            raise ValueError("'groupx' and 'groupy' must have the same number of hierarchical levels")
+            raise ValueError("'x' and 'y' must have the same number of features (columns)")
+        if n_levels != groupy.shape[1]:
+            raise ValueError("'groupx' and 'groupy' must have the same number of hierarchical levels (columns)")
+        if paired is None: paired = 0
+        if int(paired) != paired or not (0 <= paired <= n_levels):
+            raise ValueError(f"'paired' must be an integer between 0 and {n_levels}")
+        first_paired = n_levels - int(paired) # levels >= first_paired are paired
 
     # define functions
 
@@ -368,29 +328,26 @@ def hierarchicalBootsrap(x, groupx, y=None, groupy=None, paired=False, n_iter=10
     def recursive_sample2(idx_x,idx_y,groupx,groupy,level,paired):
         if level < 0:
             return resample(idx_x), resample(idx_y)
-        if paired[level]:
+        if level >= paired:
             # sample groups jointly
-            ids = np.intersect1d(np.unique(groupx[idx_x,level]), np.unique(groupy[idx_y,level]))
-            if len(ids) == 0:
-                raise ValueError(f"when 'paired' is True, 'x' and 'y' must share at least one group at that hiearchy level ({level})")
-            sampled = resample(ids)
+            group_ids = np.intersect1d(np.unique(groupx[idx_x,level]), np.unique(groupy[idx_y,level]))
+            if len(group_ids) == 0:
+                raise ValueError(f"'x' and 'y' share no group at a paired hierarchy level ({level})")
+            sampled_groups = resample(group_ids)
             # for each sampled group, recurse to lower level
             out_x, out_y = [], []
-            for group_id in sampled:
+            for group_id in sampled_groups:
                 ix = idx_x[groupx[idx_x,level] == group_id]
                 iy = idx_y[groupy[idx_y,level] == group_id]
                 rx, ry = recursive_sample2(ix, iy, groupx, groupy, level-1, paired)
                 out_x.append(rx)
                 out_y.append(ry)
-        else:
-            # from this level, resort to independent sampling of 'x' and 'y' CAN REPLACE WITH TWO SIMPLE CALLS to recursive_sample(idx_x,groupx,level) ??
-            ids_x = np.unique(groupx[idx_x,level])
-            sampled_x = resample(ids_x)
-            out_x = [recursive_sample(idx_x[groupx[idx_x,level] == group_id], groupx, level-1) for group_id in sampled_x]
-            ids_y = np.unique(groupy[idx_y,level])
-            sampled_y = resample(ids_y)
-            out_y = [recursive_sample(idx_y[groupy[idx_y,level] == group_id], groupy, level-1) for group_id in sampled_y]
-        return np.concatenate(out_x), np.concatenate(out_y)
+            return np.concatenate(out_x), np.concatenate(out_y)
+        # if unpaired, from this level onward resort to independent sampling of 'x' and 'y'
+        return recursive_sample(idx_x,groupx,level), recursive_sample(idx_y,groupy,level)
+
+    def summarize(boot):
+        return MCpValue(boot,np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0)
 
     # 1. single-condition bootstrap
     if y is None:
@@ -398,17 +355,16 @@ def hierarchicalBootsrap(x, groupx, y=None, groupy=None, paired=False, n_iter=10
         for i in range(n_iter):
             indices = recursive_sample(np.arange(groupx.shape[0]), groupx, groupx.shape[1]-1)
             boot_means[i] = np.nanmean(x[indices], axis=0)
-        ci = np.nanpercentile(boot_means, [2.5,97.5], axis=0)
-        p_value = (ci[0] > 0) | (ci[1] < 0)
+        p_value, ci = summarize(boot_means) # (n_features,), (2, n_features)
         return boot_means, p_value, ci
 
     # 2. two-conditions bootstrap
     boot_x = np.full((n_iter,x.shape[1]), np.nan)
     boot_y = np.full((n_iter,y.shape[1]), np.nan)
     for i in range(n_iter):
-        idx_x, idx_y = recursive_sample2(np.arange(groupx.shape[0]), np.arange(groupy.shape[0]), groupx, groupy, groupx.shape[1]-1, paired)
+        idx_x, idx_y = recursive_sample2(np.arange(groupx.shape[0]), np.arange(groupy.shape[0]), groupx, groupy, groupx.shape[1]-1, first_paired)
         boot_x[i] = np.nanmean(x[idx_x], axis=0)
         boot_y[i] = np.nanmean(y[idx_y], axis=0)
-    boot_diff = boot_x - boot_y
-
-    return np.stack([boot_x,boot_y,boot_diff], axis=0)
+    boot = np.stack([boot_x,boot_y,boot_x-boot_y], axis=-1) # (n_iter, n_features, 3)
+    p_value, ci = summarize(boot) # (n_features, 3), (2, n_features, 3)
+    return boot, p_value, ci
