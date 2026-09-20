@@ -474,6 +474,7 @@ def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorTyp
             data = [column[~np.isnan(column)] for column in data.T]
     else:
         data = [np.array(d)[~np.isnan(d)] for d in data]
+    if x is None: x = np.arange(len(data))
 
     if color is None: color = 'b'
     try:
@@ -505,8 +506,6 @@ def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorTyp
         bp = ax.violinplot(data,positions=x,facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
 
     if label is not None:
-        if x is None:
-            x = np.arange(1,len(label)+1)
         ax.set_xticks(x,label)
 
     return bp
