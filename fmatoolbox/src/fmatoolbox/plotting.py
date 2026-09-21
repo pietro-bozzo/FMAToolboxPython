@@ -451,7 +451,7 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
 
 
 def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
-    """ draw box plots for groups of data
+    """draw box plots for groups of data
     note: calls matplotlib's boxplot, which sets xticks
 
     arguments:
@@ -470,18 +470,19 @@ def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorTyp
     if isinstance(data,np.ndarray):
         if data.ndim == 1:
             data = data[~np.isnan(data)]
-        else:
+        elif data.ndim == 2:
             data = [column[~np.isnan(column)] for column in data.T]
+        else:
+            raise ValueError("'data' must be 1d or 2d")
     else:
         data = [np.array(d)[~np.isnan(d)] for d in data]
     if x is None: x = np.arange(len(data))
-
-    if color is None: color = 'b'
-    try:
-        color = mplc.to_rgba(color)
-        color = [color] * len(data)
-    except:
-        pass
+    if color is None: color = ('#1c8dfc',) * len(data) # blue
+    else:
+        try:
+            color = mplc.to_rgba(color)
+            color = (color,) * len(data)
+        except: pass
 
     if mode == 'box':
         lw = ax.spines["left"].get_linewidth() * 0.8
@@ -503,7 +504,7 @@ def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorTyp
         for col in color:
             r, g, b, a = mplc.to_rgba(col)
             facecolor.append((r,g,b,a*0.5))
-        bp = ax.violinplot(data,positions=x,facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
+        bp = ax.violinplot(data,positions=x,side='high',facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
 
     if label is not None:
         ax.set_xticks(x,label)
