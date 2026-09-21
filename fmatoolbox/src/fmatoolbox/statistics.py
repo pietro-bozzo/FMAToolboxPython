@@ -262,7 +262,7 @@ def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000
     return {'stat':stat, 'clusters':clusters, 'cluster_stat':cluster_stats, 'p_cluster':p_cluster, 'sig_mask':sig_mask, 'threshold':thresh}
 
 
-def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter=1000):
+def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter:int=None, rng=None):
     """hierarchical bootstrap for nested grouped observations
     at each level groups are sampled with replacement, and so are observations at the lowest level
 
@@ -275,6 +275,7 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter=10
         paired:    number of paired levels treated as a repeated-measures comparison, counting from the top; groups at those levels are sampled
                    jointly so they occur in both conditions, requiring common group identifiers in `groupx` and `groupy`, defaults to 0
         n_iter:    number of bootstrap iterations, defaults to 1000
+        rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
 
     Returns:
         means:     bootstrap distribution of the data mean, ignoring nans, shape depends on whether `y` is:
@@ -288,11 +289,16 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter=10
     # validate input
     x = np.asarray(x, dtype=float)
     groupx = np.asarray(groupx)
-    if x.ndim == 1:         x = x[:,None]
-    if groupx.ndim == 1:    groupx = groupx[:,None]
+    if x.ndim == 1:
+        x = x[:,None]
+    if groupx.ndim == 1:
+        groupx = groupx[:,None]
+    n_features = x.shape[1]
     n_levels = groupx.shape[1]
     if x.shape[0] != groupx.shape[0]:
         raise ValueError("'x' and 'groupx' must have the same number of samples (rows)")
+    if n_iter is None: n_iter = 1000
+
     if y is not None:
         if groupy is None:
             raise ValueError("'groupy' must be given when 'y' is given")
@@ -313,55 +319,61 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter=10
 
     # define functions
 
-    rng = np.random.default_rng()
-    resample = lambda x : rng.choice(x, size=len(x), replace=True)
+    rng = np.random.default_rng(rng)
+    resample = lambda a: a[rng.integers(len(a), size=len(a))]
 
-    def recursive_sample(indices,groups,level):
+    def build_tree(idx, groups, level):
+        """built once, contains nested lists of index arrays, leaves (level < 0) are arrays of observation indices"""
         if level < 0:
-            return resample(indices)
-        group_ids = np.unique(groups[indices,level]) # groups at this level
-        sampled_groups = resample(group_ids)
-        return np.concatenate([recursive_sample(indices[groups[indices,level] == group_id], groups, level-1)
-            for group_id in sampled_groups])
+            return idx
+        col = groups[idx,level]
+        return [build_tree(idx[col == g], groups, level-1) for g in np.unique(col)]
 
-    def recursive_sample2(idx_x,idx_y,groupx,groupy,level,paired):
+    def sample_tree(node, level):
         if level < 0:
-            return resample(idx_x), resample(idx_y)
-        if level >= paired:
-            # sample groups jointly
-            group_ids = np.intersect1d(np.unique(groupx[idx_x,level]), np.unique(groupy[idx_y,level]))
+            return resample(node)
+        picks = rng.integers(len(node), size=len(node)) # sample groups with replacement
+        return np.concatenate([sample_tree(node[k], level-1) for k in picks])
+
+    def build_pair(idx_x, idx_y, level):
+        if level < 0:
+            return idx_x, idx_y
+        if level >= first_paired:
+            cx, cy = groupx[idx_x, level], groupy[idx_y, level]
+            group_ids = np.intersect1d(np.unique(cx), np.unique(cy))
             if len(group_ids) == 0:
                 raise ValueError(f"'x' and 'y' share no group at a paired hierarchy level ({level})")
-            sampled_groups = resample(group_ids)
-            # for each sampled group, recurse to lower level
-            out_x, out_y = [], []
-            for group_id in sampled_groups:
-                ix = idx_x[groupx[idx_x,level] == group_id]
-                iy = idx_y[groupy[idx_y,level] == group_id]
-                rx, ry = recursive_sample2(ix, iy, groupx, groupy, level-1, paired)
-                out_x.append(rx)
-                out_y.append(ry)
-            return np.concatenate(out_x), np.concatenate(out_y)
-        # if unpaired, from this level onward resort to independent sampling of 'x' and 'y'
-        return recursive_sample(idx_x,groupx,level), recursive_sample(idx_y,groupy,level)
+            return [build_pair(idx_x[cx == g], idx_y[cy == g], level-1) for g in group_ids]
+        # unpaired from this level down: independent subtrees for x and y
+        return build_tree(idx_x, groupx, level), build_tree(idx_y, groupy, level)
+
+    def sample_pair(node, level):
+        if level < 0:
+            return resample(node[0]), resample(node[1])
+        if level >= first_paired:
+            picks = rng.integers(len(node), size=len(node)) # the same draw is used for x and y
+            parts = [sample_pair(node[k], level-1) for k in picks]
+            return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
+        return sample_tree(node[0], level), sample_tree(node[1], level)
 
     def summarize(boot):
         return MCpValue(boot,np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0)
 
     # 1. single-condition bootstrap
     if y is None:
-        boot_means = np.full((n_iter,x.shape[1]), np.nan)
+        tree = build_tree(np.arange(x.shape[0]), groupx, n_levels-1)
+        boot_means = np.full((n_iter,n_features), np.nan)
         for i in range(n_iter):
-            indices = recursive_sample(np.arange(groupx.shape[0]), groupx, groupx.shape[1]-1)
-            boot_means[i] = np.nanmean(x[indices], axis=0)
+            boot_means[i] = np.nanmean(x[sample_tree(tree, n_levels-1)], axis=0)
         p_value, ci = summarize(boot_means) # (n_features,), (2, n_features)
         return boot_means, p_value, ci
 
     # 2. two-conditions bootstrap
-    boot_x = np.full((n_iter,x.shape[1]), np.nan)
-    boot_y = np.full((n_iter,y.shape[1]), np.nan)
+    tree = build_pair(np.arange(x.shape[0]), np.arange(y.shape[0]), n_levels-1)
+    boot_x = np.full((n_iter,n_features), np.nan)
+    boot_y = np.full((n_iter,n_features), np.nan)
     for i in range(n_iter):
-        idx_x, idx_y = recursive_sample2(np.arange(groupx.shape[0]), np.arange(groupy.shape[0]), groupx, groupy, groupx.shape[1]-1, first_paired)
+        idx_x, idx_y = sample_pair(tree, n_levels-1)
         boot_x[i] = np.nanmean(x[idx_x], axis=0)
         boot_y[i] = np.nanmean(y[idx_y], axis=0)
     boot = np.stack([boot_x,boot_y,boot_x-boot_y], axis=-1) # (n_iter, n_features, 3)
