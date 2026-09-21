@@ -262,18 +262,21 @@ def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000
     return {'stat':stat, 'clusters':clusters, 'cluster_stat':cluster_stats, 'p_cluster':p_cluster, 'sig_mask':sig_mask, 'threshold':thresh}
 
 
-def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter:int=None, rng=None):
-    """hierarchical bootstrap for nested grouped observations
-    at each level groups are sampled with replacement, and so are observations at the lowest level
+def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired:int=None, depth:int=None, n_iter:int=None, rng=None):
+    """hierarchical bootstrap to estimate the mean of nested grouped observations
+    at each level groups are sampled with replacement, and so can be observations at the lowest level
+    implemented as described in Saravanan et al. (2021) https://doi.org/10.1101/819334
 
     Args:
         x:         data for condition X, shape (n_samples_x, n_features)
-        groupx:    hierarchical grouping variables for X, shape (n_samples_x, n_groups), columns ordered from lowest to highest level,
+        groupx:    hierarchical grouping variables for X, shape (n_samples_x, n_levels), columns ordered from lowest to highest level,
                    e.g. groupx[:,0] = trial, groupx[:,1] = subject, giving the hierarchy: subject -> trial -> observations
         y:         optional data for condition Y, shape (n_samples_y, n_features), if None only X is bootstrapped
-        groupy:    optional grouping variables corresponding to `y`, shape (n_samples_y, n_groups)
+        groupy:    optional grouping variables corresponding to `y`, shape (n_samples_y, n_levels)
         paired:    number of paired levels treated as a repeated-measures comparison, counting from the top; groups at those levels are sampled
                    jointly so they occur in both conditions, requiring common group identifiers in `groupx` and `groupy`, defaults to 0
+        depth:     number of levels resampled with replacement, counting from the top; defaults to n_levels: resampling all levels
+                   except for observations (X and Y), to avoid excessive variance in estimating means
         n_iter:    number of bootstrap iterations, defaults to 1000
         rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
 
@@ -297,6 +300,11 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter:in
     n_levels = groupx.shape[1]
     if x.shape[0] != groupx.shape[0]:
         raise ValueError("'x' and 'groupx' must have the same number of samples (rows)")
+    if depth is None: depth = n_levels
+    if int(depth) != depth or not (1 <= depth <= n_levels + 1):
+        raise ValueError(f"'depth' must be an integer between 1 and the number of levels + 1 ({n_levels + 1})")
+    last_level = n_levels - int(depth) # group levels < last_level are kept intact
+    resample_obs = depth == n_levels + 1 # observations are resampled only at full de
     if n_iter is None: n_iter = 1000
 
     if y is not None:
@@ -314,13 +322,13 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter:in
             raise ValueError("'groupx' and 'groupy' must have the same number of hierarchical levels (columns)")
         if paired is None: paired = 0
         if int(paired) != paired or not (0 <= paired <= n_levels):
-            raise ValueError(f"'paired' must be an integer between 0 and {n_levels}")
+            raise ValueError(f"'paired' must be an integer between 0 and the number of levels ({n_levels})")
         first_paired = n_levels - int(paired) # levels >= first_paired are paired
 
     # define functions
 
     rng = np.random.default_rng(rng)
-    resample = lambda a: a[rng.integers(len(a), size=len(a))]
+    resample = lambda a: a[rng.integers(len(a), size=len(a))] if resample_obs else a
 
     def build_tree(idx, groups, level):
         """built once, contains nested lists of index arrays, leaves (level < 0) are arrays of observation indices"""
@@ -329,11 +337,14 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter:in
         col = groups[idx,level]
         return [build_tree(idx[col == g], groups, level-1) for g in np.unique(col)]
 
+    def draw(n, level):
+        """indices of the children to use at this level, no resampling if deeper than last_level-1"""
+        return rng.integers(n, size=n) if level >= last_level else np.arange(n)
+
     def sample_tree(node, level):
         if level < 0:
             return resample(node)
-        picks = rng.integers(len(node), size=len(node)) # sample groups with replacement
-        return np.concatenate([sample_tree(node[k], level-1) for k in picks])
+        return np.concatenate([sample_tree(node[k], level-1) for k in draw(len(node), level)])
 
     def build_pair(idx_x, idx_y, level):
         if level < 0:
@@ -351,8 +362,7 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired=None, n_iter:in
         if level < 0:
             return resample(node[0]), resample(node[1])
         if level >= first_paired:
-            picks = rng.integers(len(node), size=len(node)) # the same draw is used for x and y
-            parts = [sample_pair(node[k], level-1) for k in picks]
+            parts = [sample_pair(node[k], level-1) for k in draw(len(node), level)] # same draw for x and y
             return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
         return sample_tree(node[0], level), sample_tree(node[1], level)
 
