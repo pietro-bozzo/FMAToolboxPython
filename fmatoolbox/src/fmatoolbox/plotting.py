@@ -466,6 +466,9 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         color:  color for boxes, violins, and scatter plots, one per dataset or a single one for all, defaults to blue
         label:  xtick label below each plotted distribution, defaults to no labels
         ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
+
+    Returns:
+        list of respective outputs of functions called per mode, same length as `mode`
     """
 
     # attempt casting to np array
