@@ -5,11 +5,11 @@ import numpy as np
 import matplotlib.axes as mpla
 import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
-import matplotlib.typing as mplt
 import scipy as sp
 from collections.abc import Iterable, Collection, Sequence
 from typing import Literal, Callable
 from matplotlib.axes import Axes
+from matplotlib.typing import ColorType
 from numpy.typing import ArrayLike
 from os import PathLike
 
@@ -81,7 +81,7 @@ def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[
     return fig, axs
 
 
-def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,mplt.ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
+def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
     # set multiple axes properties at once
     #
     # arguments:
@@ -197,7 +197,7 @@ def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:Axes=None,
     return ax.plot(*args, **kwargs)
 
 
-def plotXY(data, start=None, stop=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
+def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axes=None):
     # plot columns of 'data', interpreting the first as the x axis and all others as y values
 
     data = np.array(data,ndmin=2)
@@ -323,7 +323,7 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     return im
 
 
-def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None, color:mplt.ColorType=None, mode:Literal['area','error','bar']=None,
+def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None, color:ColorType=None, mode:Literal['area','error','bar']=None,
             alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:Axes=None):
     """plot mean +/- confidence intervals of matrix data
 
@@ -450,41 +450,47 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
     return
 
 
-def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorType=None, label=None, ax:Axes=None):
+def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['box','violin','scatter']|Collection[str]=None, color:ColorType|Collection[ColorType]=None,
+            label:str|Sequence[str]=None, ax:Axes=None):
     """draw box plots for groups of data
     note: calls matplotlib's boxplot, which sets xticks
 
-    arguments:
-        data
-        x
-        mode:     either 'box' or 'violin', default is 'box'
-        color     color = None
-        label     str = None, legend label for line
-        ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    Args:
+        data:   groups of data to plot, same format as ``matplotlib.pyplot.boxplot`` `x` argument, an array or a sequence of array-like vectors, one per box
+        x:      positions for each drawn box, defaults to `range(n_data)`
+        mode:   one of 'box', 'violin', or 'scatter', or a Collection of any of them, all listed modes are drawn together, defaults to 'box'
+        color:  color for the boxes, one per box or a single one for all, defaults to blue
+        label:  xtick label below each box, defaults to no labels
+        ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
     """
-
-    if mode is None: mode = 'box'
-    if ax is None: ax = plt.gca()
 
     # remove nans
     if isinstance(data,np.ndarray):
         if data.ndim == 1:
             data = data[~np.isnan(data)]
+            n_data = 1
         elif data.ndim == 2:
-            data = [column[~np.isnan(column)] for column in data.T]
+            data = [data[~np.isnan(data[:,col]),col] for col in range(data.shape[1])]
+            n_data = len(data)
         else:
             raise ValueError("'data' must be 1d or 2d")
     else:
         data = [np.array(d)[~np.isnan(d)] for d in data]
-    if x is None: x = np.arange(len(data))
-    if color is None: color = ('#1c8dfc',) * len(data) # blue
+        n_data = len(data)
+
+    # defaults
+    if mode is None: mode = ('box',)
+    if isinstance(mode, str): mode = (mode,)
+    if ax is None: ax = plt.gca()
+    x = np.arange(n_data) if x is None else np.array(x,ndmin=1)
+    if color is None: color = ('#1c8dfc',) * n_data # blue
     else:
         try:
             color = mplc.to_rgba(color)
-            color = (color,) * len(data)
+            color = (color,) * n_data
         except: pass
 
-    if mode == 'box':
+    if 'box' in mode:
         lw = ax.spines["left"].get_linewidth() * 0.8
         mksz = ax.spines["left"].get_linewidth() * 2
         medianprops = {'linewidth': lw}
@@ -499,12 +505,18 @@ def boxPlot(data, x=None, mode:Literal['box','violin']=None, color:mplt.ColorTyp
             box.set(facecolor=(r, g, b, a*0.2),edgecolor=col)
         for median, col in zip(bp['medians'],color):
             median.set_color(col)
-    else:
+
+    if 'violin' in mode:
         facecolor = []
         for col in color:
             r, g, b, a = mplc.to_rgba(col)
             facecolor.append((r,g,b,a*0.5))
         bp = ax.violinplot(data,positions=x,side='high',facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
+
+    if 'scatter' in mode:
+        x_jittered = lambda a, n : np.repeat(a,n) + np.random.normal(0, (x[1]-x[0])/15, size=n)
+        bp = [ax.scatter(x_jittered(x[i],len(data[i])), data[i], c=color[i], alpha=0.7) for i in range(n_data)]
+        #bp = ax.scatter(x,data)#,facecolor=color,linecolor=color,showmedians=True,showextrema=False)
 
     if label is not None:
         ax.set_xticks(x,label)
@@ -580,7 +592,7 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Seque
     return
 
 
-def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:Axes=None, **kwargs):
+def pHorzLine(p, t=None, dy=None, color:ColorType=None, ax:Axes=None, **kwargs):
     """draw a horizontal line indicating time points where time series passed a statistical test
 
     arguments:
@@ -620,7 +632,7 @@ def pHorzLine(p, t=None, dy=None, color:mplt.ColorType=None, ax:Axes=None, **kwa
     return
 
 
-def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=None, ax:Axes=None, **plot_kwargs):
+def plotIntervals(intervals, color:ColorType='gray', alpha=0.3, label:str=None, ax:Axes=None, **plot_kwargs):
 
     intervals = fmatoolbox.general.consolidateIntervals(intervals)
     if intervals.size == 0:
@@ -634,7 +646,7 @@ def plotIntervals(intervals, color:mplt.ColorType='gray', alpha=0.3, label:str=N
 
 
 def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None,
-            norm:Literal['density','max','cdf']=None, color:mplt.ColorType=None, alpha:float=None, label=None, ax:Axes=None, **plot_kwargs):
+            norm:Literal['density','max','cdf']=None, color:ColorType=None, alpha:float=None, label=None, ax:Axes=None, **plot_kwargs):
     """estimate and plot probability density function (PDF) of data
 
     arguments:
