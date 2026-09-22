@@ -450,32 +450,43 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
     return
 
 
-def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['box','violin','scatter']|Collection[str]=None, color:ColorType|Collection[ColorType]=None,
+def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['box','violin','scatter','link']|Collection[str]=None, color:ColorType|Collection[ColorType]=None,
             label:str|Sequence[str]=None, ax:Axes=None):
-    """draw box plots for groups of data
+    """draw box plots to represent groups of datasets
     note: calls matplotlib's boxplot, which sets xticks
 
     Args:
-        data:   groups of data to plot, same format as ``matplotlib.pyplot.boxplot`` `x` argument, an array or a sequence of array-like vectors, one per box
-        x:      positions for each drawn box, defaults to `range(n_data)`
-        mode:   one of 'box', 'violin', or 'scatter', or a Collection of any of them, all listed modes are drawn together, defaults to 'box'
-        color:  color for the boxes, one per box or a single one for all, defaults to blue
-        label:  xtick label below each box, defaults to no labels
+        data:   groups of datasets to plot, same format as ``matplotlib.pyplot.boxplot`` `x` argument, an array or a sequence of array-like vectors, one per dataset
+        x:      positions for each drawn distribution, defaults to `range(n_data)`
+        mode:   one or more of the following options, which will be drawn together:
+                - 'box', box-and-whiskers plots per dataset, default
+                - 'violin', violin plots per dataset
+                - 'scatter', scatter plots of data points of each dataset
+                - 'link, lines between data points of each adjacent dataset
+        color:  color for boxes, violins, and scatter plots, one per dataset or a single one for all, defaults to blue
+        label:  xtick label below each plotted distribution, defaults to no labels
         ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
     """
 
-    # remove nans
-    if isinstance(data,np.ndarray):
+    # attempt casting to np array
+    if hasattr(data, 'to_numpy'): data = data.to_numpy()
+    if hasattr(data, 'values'):
+        data_temp = data.values
+        if isinstance(data_temp, np.ndarray):
+            data = data_temp
+    # make a copy of 'data' free from nans, keep original 'data' to plot scatter and lines
+    if isinstance(data, np.ndarray):
         if data.ndim == 1:
-            data = data[~np.isnan(data)]
+            data_clean = data[~np.isnan(data)]
             n_data = 1
         elif data.ndim == 2:
-            data = [data[~np.isnan(data[:,col]),col] for col in range(data.shape[1])]
+            data_clean = [data[~np.isnan(data[:,col]),col] for col in range(data.shape[1])]
+            data = data.T
             n_data = len(data)
         else:
             raise ValueError("'data' must be 1d or 2d")
     else:
-        data = [np.array(d)[~np.isnan(d)] for d in data]
+        data_clean = [np.array(d)[~np.isnan(d)] for d in data]
         n_data = len(data)
 
     # defaults
@@ -489,7 +500,10 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
             color = mplc.to_rgba(color)
             color = (color,) * n_data
         except: pass
+    if len(color) != n_data:
+        raise ValueError("'color' must have one element for each dataset in 'data'")
 
+    out = []
     if 'box' in mode:
         lw = ax.spines["left"].get_linewidth() * 0.8
         mksz = ax.spines["left"].get_linewidth() * 2
@@ -497,7 +511,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         boxprops = {'linewidth': lw}
         flierprops = {'marker': '.','markerfacecolor': 'black','markersize': mksz}
 
-        bp = ax.boxplot(data,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
+        bp = ax.boxplot(data_clean,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
                         capprops={'linewidth':lw},flierprops=flierprops)
         for box, col in zip(bp["boxes"],color):
             r, g, b, a = mplc.to_rgba(col)
@@ -505,23 +519,30 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
             box.set(facecolor=(r, g, b, a*0.2),edgecolor=col)
         for median, col in zip(bp['medians'],color):
             median.set_color(col)
+        out.append(bp)
 
     if 'violin' in mode:
         facecolor = []
         for col in color:
             r, g, b, a = mplc.to_rgba(col)
             facecolor.append((r,g,b,a*0.5))
-        bp = ax.violinplot(data,positions=x,side='high',facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
+        vp = ax.violinplot(data_clean,positions=x,side='high',facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
+        out.append(vp)
 
+    # following plots use original data and are unaffected by nans
+    x_drawn = [np.repeat(x[i],len(data[i])) for i in range(n_data)]
     if 'scatter' in mode:
-        x_jittered = lambda a, n : np.repeat(a,n) + np.random.normal(0, (x[1]-x[0])/15, size=n)
-        bp = [ax.scatter(x_jittered(x[i],len(data[i])), data[i], c=color[i], alpha=0.7) for i in range(n_data)]
-        #bp = ax.scatter(x,data)#,facecolor=color,linecolor=color,showmedians=True,showextrema=False)
+        jitter = lambda a : a + np.random.normal(0, (x[1]-x[0])/15, size=len(a))
+        x_drawn = [jitter(xi) for xi in x_drawn]
+        out.append( [ax.scatter(x_drawn[i], data[i], c=color[i], alpha=0.7) for i in range(n_data)] )
+
+    if 'link' in mode:
+        out.append( [ax.plot(np.stack([x_drawn[i],x_drawn[i+1]]), np.stack([data[i],data[i+1]]), color='gray', alpha=0.5) for i in range(n_data-1)] )
 
     if label is not None:
         ax.set_xticks(x,label)
 
-    return bp
+    return out
 
 
 def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Sequence[bool]=(False,True,True,True),
