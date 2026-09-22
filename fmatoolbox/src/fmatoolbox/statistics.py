@@ -276,7 +276,8 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired:int=None, depth
         paired:    number of paired levels treated as a repeated-measures comparison, counting from the top; groups at those levels are sampled
                    jointly so they occur in both conditions, requiring common group identifiers in `groupx` and `groupy`, defaults to 0
         depth:     number of levels resampled with replacement, counting from the top; defaults to n_levels: resampling all levels
-                   except for observations (X and Y), to avoid excessive variance in estimating means
+                   except for observations (X and Y), to avoid excessive variance in estimating means, but n_levels + 1 is recomended
+                   when top levels have few distinct groups
         n_iter:    number of bootstrap iterations, defaults to 1000
         rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
 
