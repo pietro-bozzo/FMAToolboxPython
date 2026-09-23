@@ -52,33 +52,36 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
     return
 
 
-def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection:str=None, format:Literal['paper','poster']='paper'):
-    # make a figure
-    #
-    # arguments:
-    #     title         string, figure title
-    #     n             (2,1) int = [1,1], number of subplots rows and columns
-    #     size          (2,1) float = [20,10], figure size (cm)
-    #     projection    str = None, projection of axes
-    #     format        {'paper','poster'}, increases figure size, font sizes, and axes lines' width
-    #
-    # output:
-    #     fig           matplotlib figure
-    #     axs           iterable of matplotlib.axes.Axes
+def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection:str=None, constrained_layout:bool=None, format:Literal['paper','poster']='paper'):
+    """make a figure
 
+    Args:
+        title:                figure title, defaults to no title
+        n:                    number of subplots' rows and columns, defaults to (1,1)
+        size:                 figure size (cm), defaults to (20,10)
+        projection:           projection of axis, defaults to cartesian axis
+        constrained_layout:   if True (default), axis sizes are optimized by ``matplotlib.pyplot.subplots`` constrained_layout option
+        format:               one of 'paper' or 'poster', 'poster' increases figure size, font sizes, and axes lines' width
+
+    Returns:
+        fig:                  matplotlib figure
+        ax:                   Sequence of ``matplotlib.axes.Axes``
+    """
+
+    if constrained_layout is None: constrained_layout = True
     cm = 1 / 2.54 # inches to centimeter conversion factor
     if format == 'poster':
         size = [s*2.5 for s in size]
-    fig, axs = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=True,subplot_kw=dict(projection=projection))
+    fig, ax = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=constrained_layout,subplot_kw=dict(projection=projection))
 
     # promote single axis to sequence
-    if isinstance(axs,mpla._axes.Axes):
-        axs = [axs]
+    if isinstance(ax,mpla._axes.Axes):
+        ax = [ax]
 
     fig.suptitle(title)
-    adjustAxes(axs,format)
+    adjustAxes(ax,format)
 
-    return fig, axs
+    return fig, ax
 
 
 def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
@@ -223,8 +226,8 @@ def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axe
     return
 
 
-def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:ArrayLike|Callable|str=None,
-                 sortax:int=None, xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:float=None, bar:str=None, ax:Axes=None):
+def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:ArrayLike|Callable|str=None, sortax:int=None,
+                 xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:float=None, bar:str=None, barticks=None, ax:Axes=None, **kwargs):
     """plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
@@ -244,6 +247,7 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
         aspect          float = 3/4, image aspect ratio
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects
+        barticks        (:,) float, if given, draw colorbar next to `ax` with ticks specified by `barticks`, and return both `im` and `cb` objects
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
 
     output:
@@ -303,11 +307,15 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
 
     if aspect is None: aspect = 3 / 4
     ax.set_aspect(aspect)
-    im = ax.imshow(data,aspect='auto',vmin=vmin,vmax=vmax,origin='lower',extent=[x[0]-dx,x[-1]+dx,y[0]-dy,y[-1]+dy])
+    im = ax.imshow(data,aspect='auto',vmin=vmin,vmax=vmax,origin='lower',extent=[x[0]-dx,x[-1]+dx,y[0]-dy,y[-1]+dy],**kwargs)
     if alpha is not None:
         im.set_alpha(alpha)
-    if bar is not None:
-        cb = plt.colorbar(im,label=bar,ax=ax)
+    if bar is not None or barticks is not None:
+        cb = plt.colorbar(im, label=bar, ticks=barticks, ax=ax)
+        label_fs = ax.xaxis.label.get_fontsize()
+        cb.set_label(bar, fontsize=label_fs)
+        tick_fs = ax.xaxis.get_ticklabels()[0].get_fontsize()
+        cb.ax.tick_params(labelsize=tick_fs)
 
     # plot peaks
     if sortby == 'peak-show':
@@ -318,7 +326,7 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
             peaks = peaks if y is None else y[peaks]
             ax.plot(x,np.sort(peaks),color='r')
 
-    if bar is not None:
+    if bar is not None or barticks is not None:
         return im, cb
     return im
 
@@ -664,9 +672,12 @@ def plotIntervals(intervals, color:ColorType='gray', alpha=0.3, label:str=None, 
     if ax is None:
         ax = plt.gca()
 
-    ax.axvspan(intervals[0,0],intervals[0,1],color=color,alpha=alpha,label=label,**plot_kwargs)
+    draw = lambda a, b, _label : ax.axvspan(a, b, facecolor=color, edgecolor='none', alpha=alpha, label=_label, **plot_kwargs)
+    draw(intervals[0,0], intervals[0,1], label)
+    #ax.axvspan(intervals[0,0],intervals[0,1],facecolor=color,edgecolor='none',alpha=alpha,label=label,**plot_kwargs)
     for start, stop in intervals[1:]:
-        ax.axvspan(start,stop,color=color,alpha=alpha,**plot_kwargs)
+        draw(start, stop, None)
+        #ax.axvspan(start,stop,facecolor=color,edgecolor='none',alpha=alpha,**plot_kwargs)
 
 
 def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None,
