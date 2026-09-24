@@ -28,10 +28,10 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
 
     lw = 1 if format == 'paper' else 2
     axw = 1.3 if format == 'paper' else 2.1
-    ax_title_fs = 9 if format == 'paper' else 18
-    ax_label_fs = 9 if format == 'paper' else 18
+    ax_title_fs = 7 if format == 'paper' else 18
+    ax_label_fs = 7 if format == 'paper' else 18
     ax_label_pad = 0.1 if format == 'paper' else 1
-    ax_tick_fs = 8 if format == 'paper' else 14
+    ax_tick_fs = 6 if format == 'paper' else 14
     ax_tick_l = 2 if format == 'paper' else 5
     ax_tick_pad = 1 if format == 'paper' else 2
 
@@ -552,11 +552,13 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
 
     if label is not None:
         ax.set_xticks(x,label)
+    ax.spines["bottom"].set_visible(False)
+    ax.tick_params(axis="x", which="both", length=0)
 
     return out
 
 
-def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Sequence[bool]=(False,True,True,True),
+def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Sequence[bool]=(False,True,True,True), angle:bool=None, lw:float=None,
          ax:Axes=None) -> None:
     """plot horizontal bars and asterisks indicating significant differences between distributions
 
@@ -566,6 +568,8 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Seque
         alpha:  false-discovery tolerance level, defaults to 0.05
         dy:     scale vertical distances between bars, defaults to 1
         draw:   draw flags for [n.s., *, **, ***], defaults to (False,True,True,True)
+        angle:  if True (default), horizontal bars have two vertical ticks at their extrema
+        lw:     line width, defaults to the spine width of the current axes
         ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
     """
 
@@ -574,8 +578,11 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Seque
         raise ValueError("'p' must have 3 columns")
     indices = p[:,0:2].astype(int)
     x = np.arange(p.shape[0]) if x is None else np.array(x,ndmin=1)
-    if ax is None:
-        ax = plt.gca()
+    if alpha is None: alpha = 0.05
+    if dy is None: dy = 1.
+    if angle is None: angle = True
+    if ax is None: ax = plt.gca()
+    if lw is None: lw = ax.spines["left"].get_linewidth()
     
     dx = np.diff(ax.get_xlim())[0] / 500
     y_lim = ax.get_ylim()
@@ -595,13 +602,15 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=0.05, dy:float=1, draw:Seque
         h[p[:,2] < alpha/50] = 3
         h[p[:,2] >= alpha] = 0
 
-    lw = ax.spines["left"].get_linewidth()
     fontsz = ax.xaxis.label.get_fontsize() * .8
     def _plot_line(ax, x, y, dy, p, last_p, t, single):
         if last_p > p[0]: # increase height not to overlap lines
             y = y + dy*3.5
         if not single:
-            ax.plot([x[0],x[0],x[1],x[1]],[y-dy,y,y,y-dy],color='k',lw=lw)
+            if angle:
+                ax.plot([x[0],x[0],x[1],x[1]],[y-dy,y,y,y-dy],color='k',lw=lw)
+            else:
+                ax.plot([x[0],x[1]],[y,y],color='k',lw=lw)
         ax.text(np.mean(x),y+0.8*dy,t,ha='center',va='center',color='k',size=fontsz)
         last_p = p[1]
         return y, last_p
