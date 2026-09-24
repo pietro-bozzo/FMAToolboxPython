@@ -278,7 +278,7 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired:int=None, depth
         depth:     number of levels resampled with replacement, counting from the top; defaults to n_levels: resampling all levels
                    except for observations (X and Y), to avoid excessive variance in estimating means, but n_levels + 1 is recomended
                    when top levels have few distinct groups
-        n_iter:    number of bootstrap iterations, defaults to 1000
+        n_iter:    number of bootstrap iterations, defaults to 5000
         rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
 
     Returns:
@@ -306,7 +306,7 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired:int=None, depth
         raise ValueError(f"'depth' must be an integer between 1 and the number of levels + 1 ({n_levels + 1})")
     last_level = n_levels - int(depth) # group levels < last_level are kept intact
     resample_obs = depth == n_levels + 1 # observations are resampled only at full de
-    if n_iter is None: n_iter = 1000
+    if n_iter is None: n_iter = 5000
 
     if y is not None:
         if groupy is None:
