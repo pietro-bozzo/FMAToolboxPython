@@ -525,7 +525,7 @@ def PDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','disc
                 grid = np.linspace(0,2*np.pi,n_points) # linear grid in [0,2*pi]
             density = np.zeros_like(grid)
             for theta in x:
-                density += spst.vonmises.pdf(grid-theta,1/bandwidth)
+                density += sp.stats.vonmises.pdf(grid-theta,1/bandwidth)
             if norm == 'max':
                 density /= density.max()
             else:
