@@ -27,7 +27,6 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
         axs = axs.ravel()
 
     lw = 1 if format == 'paper' else 2
-    axw = 1.3 if format == 'paper' else 2.1
     ax_title_fs = 7 if format == 'paper' else 18
     ax_label_fs = 7 if format == 'paper' else 18
     ax_label_pad = 0.1 if format == 'paper' else 1
@@ -42,7 +41,7 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
 
         # adjust thickness and font size
         [ax.spines[spine].set_linewidth(lw) for spine in ['bottom','left','polar'] if spine in ax.spines]
-        ax.tick_params(width=axw,labelsize=ax_tick_fs,pad=ax_tick_pad,length=ax_tick_l)
+        ax.tick_params(width=lw, labelsize=ax_tick_fs, pad=ax_tick_pad, length=ax_tick_l)
         ax.title.set_fontsize(ax_title_fs) # NOTE: seems not to work
         ax.xaxis.label.set_fontsize(ax_label_fs)
         ax.yaxis.label.set_fontsize(ax_label_fs)
@@ -50,6 +49,36 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
         ax.yaxis.labelpad = ax_label_pad
 
     return
+
+
+def figure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection:str=None, constrained_layout:bool=None, format:Literal['paper','poster']='paper', **kwargs):
+    """make a figure
+
+    Args:
+        title:                figure title, defaults to no title
+        n:                    number of subplots' rows and columns, defaults to (1,1)
+        size:                 figure size (cm), defaults to (20,10)
+        projection:           projection of axis, defaults to cartesian axis
+        constrained_layout:   if True (default), axis sizes are optimized by ``matplotlib.pyplot.subplots`` constrained_layout option
+        format:               one of 'paper' or 'poster', 'poster' increases figure size, font sizes, and axes lines' width
+        **kwargs              all extra key-word arguments are passed to ``matplotlib.pyplot.subplots``
+
+    Returns:
+        fig:                  matplotlib figure
+        ax:                   ``matplotlib.axes.Axes`` object or Sequence
+    """
+
+    if constrained_layout is None: constrained_layout = True
+    cm = 1 / 2.54 # inches to centimeter conversion factor
+    if format == 'poster':
+        size = [s*2.5 for s in size]
+    fig, ax = plt.subplots(n[0], n[1], figsize=[size[0]*cm,size[1]*cm], constrained_layout=constrained_layout,
+                           subplot_kw={'projection':projection}, **kwargs)
+
+    fig.suptitle(title)
+    adjustAxes(ax,format)
+
+    return fig, ax
 
 
 def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection:str=None, constrained_layout:bool=None, format:Literal['paper','poster']='paper'):
@@ -758,6 +787,8 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
 
 
 def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, height:float=None, ax:Axes=None, **plot_kwargs):
+
+    # ADD: arg bin, which changes plot mode to color map of binned fr
 
     if height is None: height = 1
 
