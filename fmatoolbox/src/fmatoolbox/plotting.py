@@ -318,7 +318,7 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         cb.ax.tick_params(labelsize=tick_fs)
 
     # plot peaks
-    if sortby == 'peak-show':
+    if isinstance(sortby,str) and sortby == 'peak-show':
         if sortax == 0:
             peaks = peaks if x is None else x[peaks]
             ax.plot(np.sort(peaks),y,color='r')
