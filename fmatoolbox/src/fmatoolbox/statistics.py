@@ -291,32 +291,34 @@ def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired:int=None, depth
     """
 
     # validate input
-    x = np.asarray(x, dtype=float)
-    groupx = np.asarray(groupx)
-    if x.ndim == 1:
-        x = x[:,None]
-    if groupx.ndim == 1:
-        groupx = groupx[:,None]
+    def validate(data, group, name):
+        data = np.asarray(data, dtype=float)
+        group = np.asarray(group)
+        if data.ndim == 1:
+            data = data[:,None]
+        if group.ndim == 1:
+            group = group[:,None]
+        if data.shape[0] != group.shape[0]:
+            raise ValueError(f"'{name}' and 'group{name}' must have the same number of samples (rows)")
+        valid = ~np.isnan(data).any(axis=1)
+        data = data[valid]
+        group = group[valid]
+        return data, group
+
+    x, groupx = validate(x,groupx,'x')
     n_features = x.shape[1]
     n_levels = groupx.shape[1]
-    if x.shape[0] != groupx.shape[0]:
-        raise ValueError("'x' and 'groupx' must have the same number of samples (rows)")
     if depth is None: depth = n_levels
     if int(depth) != depth or not (1 <= depth <= n_levels + 1):
         raise ValueError(f"'depth' must be an integer between 1 and the number of levels + 1 ({n_levels + 1})")
     last_level = n_levels - int(depth) # group levels < last_level are kept intact
-    resample_obs = depth == n_levels + 1 # observations are resampled only at full de
+    resample_obs = depth == n_levels + 1 # observations are resampled only at full depth
     if n_iter is None: n_iter = 5000
 
     if y is not None:
         if groupy is None:
             raise ValueError("'groupy' must be given when 'y' is given")
-        y = np.asarray(y, dtype=float)
-        groupy = np.asarray(groupy)
-        if y.ndim == 1:         y = y[:,None]
-        if groupy.ndim == 1:    groupy = groupy[:,None]
-        if y.shape[0] != groupy.shape[0]:
-            raise ValueError("'y' and 'groupy' must have the same number of samples (rows)")
+        y, groupy = validate(y,groupy,'y')
         if x.shape[1] != y.shape[1]:
             raise ValueError("'x' and 'y' must have the same number of features (columns)")
         if n_levels != groupy.shape[1]:
