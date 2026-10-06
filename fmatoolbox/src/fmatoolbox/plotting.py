@@ -229,7 +229,7 @@ def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:Axes=None,
     return ax.plot(*args, **kwargs)
 
 
-def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axes=None):
+def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axes=None, **kwargs):
     # plot columns of 'data', interpreting the first as the x axis and all others as y values
 
     data = np.array(data,ndmin=2)
@@ -250,7 +250,7 @@ def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axe
         label = [label] * n_lines
 
     for i in range(n_lines):
-        ax.plot(x[valid], data[valid,i+1], color=color[i], label=label[i])
+        ax.plot(x[valid], data[valid,i+1], color=color[i], label=label[i], **kwargs)
 
     return
 
@@ -566,7 +566,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         for col in color:
             r, g, b, a = mplc.to_rgba(col)
             facecolor.append((r,g,b,a*0.5))
-        vp = ax.violinplot(data_clean,positions=x,side='high',facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
+        vp = ax.violinplot(data_clean,positions=x,widths=0.8,side='high',facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
         out.append(vp)
 
     # following plots use original data and are unaffected by nans
