@@ -582,7 +582,7 @@ class regions:
             when         DESCRIBE, same input as eventIntervals
             shift        bool = False, shift epochs together in time after filtering by state
             thresh       float = 30, percentile to use as threshold, must be in [0,100]
-            window       float = 0.05 s, window size to count spikes
+            window       either: float = 0.05 s, bin size to count spikes; or 'isi', to use average inter-spike interval per region
             step         float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
                          default is no overlap
             smooth       float = None, gaussian kernel std to smooth rate over time before finding avalanches
@@ -596,17 +596,29 @@ class regions:
         """
 
         if thresh is None: thresh = 30
-        if return_fr is None: return_fr = False
-
         regs, _, _ = self._checkIDs(regs=regs)
 
-        fr = self.firingRate(regs=regs,when=when,shift=shift,window=window,step=step,smooth=smooth,norm=norm)
         size = {}
         intervals = {}
         size_t = {}
-        for i, r in enumerate(regs):
-            size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,i+1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
+        
+        # 1. bin: average inter-spike interval
+        if isinstance(window, str) and window == 'isi':
+            bin = []
+            for i, r in enumerate(regs):
+                isi = np.diff(self.spikes(regs=r,when=when,shift=True)[:,0]).mean()
+                bin.append(isi)
+                fr = self.firingRate(regs=r,when=when,shift=shift,window=isi,step=step,smooth=smooth,norm=norm)
+                size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
+            out = (size, intervals, size_t, bin)
+
+        # 2. bin: window (s)
+        else:
+            fr = self.firingRate(regs=regs,when=when,shift=shift,window=window,step=step,smooth=smooth,norm=norm)
+            for i, r in enumerate(regs):
+                size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,i+1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
+            out = (size, intervals, size_t)
 
         if return_fr:
-            return size, intervals, size_t, fr
-        return size, intervals, size_t
+            return out + (fr,)
+        return out
