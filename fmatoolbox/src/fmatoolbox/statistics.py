@@ -2,6 +2,8 @@
 
 import numpy as np
 import scipy as sp
+import pandas as pd
+import hierarch
 import statsmodels.stats.multitest
 from typing import Literal
 
@@ -262,133 +264,87 @@ def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000
     return {'stat':stat, 'clusters':clusters, 'cluster_stat':cluster_stats, 'p_cluster':p_cluster, 'sig_mask':sig_mask, 'threshold':thresh}
 
 
-def hierarchicalBootstrap(x, groupx, y=None, groupy=None, paired:int=None, depth:int=None, n_iter:int=None, rng=None):
-    """hierarchical bootstrap to estimate the mean of nested grouped observations
-    at each level groups are sampled with replacement, and so can be observations at the lowest level
-    implemented as described in Saravanan et al. (2021) https://doi.org/10.1101/819334
+def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which=None, **kwargs):
+    """hierarchical bootstrap test for the difference of mean between conditions
+    construct a group-aware bootstrap distribution for the sample means and tests the null hypothesis that the mean of the difference between conditions is zero
 
     Args:
-        x:         data for condition X, shape (n_samples_x, n_features)
-        groupx:    hierarchical grouping variables for X, shape (n_samples_x, n_levels), columns ordered from lowest to highest level,
-                   e.g. groupx[:,0] = trial, groupx[:,1] = subject, giving the hierarchy: subject -> trial -> observations
-        y:         optional data for condition Y, shape (n_samples_y, n_features), if None only X is bootstrapped
-        groupy:    optional grouping variables corresponding to `y`, shape (n_samples_y, n_levels)
-        paired:    number of paired levels treated as a repeated-measures comparison, counting from the top; groups at those levels are sampled
-                   jointly so they occur in both conditions, requiring common group identifiers in `groupx` and `groupy`, defaults to 0
-        depth:     number of levels resampled with replacement, counting from the top; defaults to n_levels: resampling all levels
-                   except for observations (X and Y), to avoid excessive variance in estimating means, but n_levels + 1 is recomended
-                   when top levels have few distinct groups
-        n_iter:    number of bootstrap iterations, defaults to 5000
-        rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
+        data:      tuple containing datasets for different conditions, each of shape (n_samples_i, n_levels1 + 1)
+        groups:    optional tuple containing hierarchical grouping variables for each condition, each of shape (n_samples_i, n_levels2),
+                   columns ordered from lowest to highest level,
+                   e.g. groupx[:,0] = subject, groupx[:,1] = trial, giving the hierarchy: subject -> trial -> observations
+        names:     optional list of names for each condition, defaults to `range(len(data))`, ignored if data has less than 3 elements
+        compare:   test statistic, either "means" (default), "corr", "jackknife_corr", or a Callable
+        which:     pairs of datasets to test, when data has more than two elements; if "all" every pairwise comparison will be tested, if a list of lists,
+                   each element contains the indeces of a pair, defaults to "all"
+        **kwargs:  all extra key-word arguments are passed to the following function, depending on `len(data)`:
+                   -1: IMPLEMENT
+                   -2: ``hierarch.stats.hypothesis_test``
+                   -3: ``hierarch.stats.multi_sample_test``
+                   examples include: alternative, skip, bootstraps, permutations, kind, random_state
 
     Returns:
-        means:     bootstrap distribution of the data mean, ignoring nans, shape depends on whether `y` is:
-                   - None, shape (n_iter, n_features) giving the bootstrap distribution of the mean of X
-                   - given, shape (n_iter, n_features, 3), with the last dimension being X, Y, X - Y
-        p_value:   p values for the following tests: "mean of X is 0" and, optionally, "mean of Y is 0", "mean of X - Y is 0";
-                   shape is either (n_features,) or (n_features,3)
-        ci:        confidence intervals for `means`, shape is either (2, n_features) or (2, n_features, 3)
+        p_value:   p values for the following tests, depending on `len(data)`:
+                   - 1: to implement
+                   - 2: float, p value for the null hypothesis between the two conditions
+                   - 3 or more: pandas DataFrame with columns condtion1, condition2, p value, corrected p value
     """
 
-    # validate input
-    def validate(data, group, name):
-        data = np.asarray(data, dtype=float)
-        group = np.asarray(group)
-        if data.ndim == 1:
-            data = data[:,None]
-        if group.ndim == 1:
-            group = group[:,None]
-        if data.shape[0] != group.shape[0]:
-            raise ValueError(f"'{name}' and 'group{name}' must have the same number of samples (rows)")
-        valid = ~np.isnan(data).any(axis=1)
-        data = data[valid]
-        group = group[valid]
-        return data, group
+    # defaults
+    if not isinstance(data, tuple):
+        data = (data,)
+    if groups is None:
+        groups = [np.empty((len(d),0)) for d in data]
+    elif not isinstance(groups, tuple):
+        groups = (groups,)
+    if which is None: which = 'all'
+    if compare is None: compare = 'means'
 
-    x, groupx = validate(x,groupx,'x')
-    n_features = x.shape[1]
-    n_levels = groupx.shape[1]
-    if depth is None: depth = n_levels
-    if int(depth) != depth or not (1 <= depth <= n_levels + 1):
-        raise ValueError(f"'depth' must be an integer between 1 and the number of levels + 1 ({n_levels + 1})")
-    last_level = n_levels - int(depth) # group levels < last_level are kept intact
-    resample_obs = depth == n_levels + 1 # observations are resampled only at full depth
-    if n_iter is None: n_iter = 5000
+    # convert data to long-format pandas DataFrame
+    frames = []
+    n_cols = None
+    for i, (d, g) in enumerate(zip(data, groups)):
 
-    if y is not None:
-        if groupy is None:
-            raise ValueError("'groupy' must be given when 'y' is given")
-        y, groupy = validate(y,groupy,'y')
-        if x.shape[1] != y.shape[1]:
-            raise ValueError("'x' and 'y' must have the same number of features (columns)")
-        if n_levels != groupy.shape[1]:
-            raise ValueError("'groupx' and 'groupy' must have the same number of hierarchical levels (columns)")
-        if paired is None: paired = 0
-        if int(paired) != paired or not (0 <= paired <= n_levels):
-            raise ValueError(f"'paired' must be an integer between 0 and the number of levels ({n_levels})")
-        first_paired = n_levels - int(paired) # levels >= first_paired are paired
+        # validate shape
+        d, g = np.asarray(d), np.asarray(g)
+        if len(d) != len(g):
+            raise ValueError(f"data[{i}] and groups[{i}] must have the same number of samples (rows)")
+        if d.ndim == 1: d = d[:,None]
+        if g.ndim == 1: g = g[:,None]
 
-    # define functions
+        # drop missing values
+        valid = ~np.isnan(d[:,-1])
+        d = d[valid]
+        g = g[valid]
 
-    rng = np.random.default_rng(rng)
-    resample = lambda a: a[rng.integers(len(a), size=len(a))] if resample_obs else a
+        # separate groups and data
+        gcols = np.column_stack((g, d[:,:-1])) if d.shape[1] > 1 else g
+        f = pd.DataFrame(gcols, columns=[f"group{k}" for k in range(gcols.shape[1])])
+        f.insert(0, "treatment", i) # add treatment column
+        f["values"] = d[:,-1].astype(float)
+        frames.append(f)
 
-    def build_tree(idx, groups, level):
-        """built once, contains nested lists of index arrays, leaves (level < 0) are arrays of observation indices"""
-        if level < 0:
-            return idx
-        col = groups[idx,level]
-        return [build_tree(idx[col == g], groups, level-1) for g in np.unique(col)]
+        # validate number of columns
+        if n_cols is not None and n_cols != f.shape[1]:
+            raise ValueError(f"datasets must have the same number of hierarchy levels (columns)")
+        n_cols = f.shape[1]
+    df = pd.concat(frames, ignore_index=True)
 
-    def draw(n, level):
-        """indices of the children to use at this level, no resampling if deeper than last_level-1"""
-        return rng.integers(n, size=n) if level >= last_level else np.arange(n)
+    # set up design matrix for null-hypothesis testing
+    formula = f"values ~ {'/'.join(c for c in df.columns if c != "values")}"
+    matrix, treatment_col = hierarch.design.design_matrix(df, formula, treatment='treatment')
 
-    def sample_tree(node, level):
-        if level < 0:
-            return resample(node)
-        return np.concatenate([sample_tree(node[k], level-1) for k in draw(len(node), level)])
+    if len(data) == 1:
+        def summarize(boot):
+            return MCpValue(boot, np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0) # p value, CI
+        # GET BOOTSTRAPPED DISTR, THEN use summarize
+        raise NotImplementedError("single-condition bootstrap not implemented yet")
+    elif len(data) == 2:
+        out = hierarch.stats.hypothesis_test(matrix, treatment_col=treatment_col, compare=compare, **kwargs)
+    else:
+        out = hierarch.stats.multi_sample_test(matrix, treatment_col=treatment_col, compare=compare, hypotheses=which, **kwargs)
+        if names is not None:
+            mapping = {float(i): n for i, n in enumerate(names)}
+            out.iloc[:,[0,1]] = out.iloc[:,[0,1]].replace(mapping)
 
-    def build_pair(idx_x, idx_y, level):
-        if level < 0:
-            return idx_x, idx_y
-        if level >= first_paired:
-            cx, cy = groupx[idx_x, level], groupy[idx_y, level]
-            group_ids = np.intersect1d(np.unique(cx), np.unique(cy))
-            if len(group_ids) == 0:
-                raise ValueError(f"'x' and 'y' share no group at a paired hierarchy level ({level})")
-            return [build_pair(idx_x[cx == g], idx_y[cy == g], level-1) for g in group_ids]
-        # unpaired from this level down: independent subtrees for x and y
-        return build_tree(idx_x, groupx, level), build_tree(idx_y, groupy, level)
-
-    def sample_pair(node, level):
-        if level < 0:
-            return resample(node[0]), resample(node[1])
-        if level >= first_paired:
-            parts = [sample_pair(node[k], level-1) for k in draw(len(node), level)] # same draw for x and y
-            return np.concatenate([p[0] for p in parts]), np.concatenate([p[1] for p in parts])
-        return sample_tree(node[0], level), sample_tree(node[1], level)
-
-    def summarize(boot):
-        return MCpValue(boot,np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0)
-
-    # 1. single-condition bootstrap
-    if y is None:
-        tree = build_tree(np.arange(x.shape[0]), groupx, n_levels-1)
-        boot_means = np.full((n_iter,n_features), np.nan)
-        for i in range(n_iter):
-            boot_means[i] = np.nanmean(x[sample_tree(tree, n_levels-1)], axis=0)
-        p_value, ci = summarize(boot_means) # (n_features,), (2, n_features)
-        return boot_means, p_value, ci
-
-    # 2. two-conditions bootstrap
-    tree = build_pair(np.arange(x.shape[0]), np.arange(y.shape[0]), n_levels-1)
-    boot_x = np.full((n_iter,n_features), np.nan)
-    boot_y = np.full((n_iter,n_features), np.nan)
-    for i in range(n_iter):
-        idx_x, idx_y = sample_pair(tree, n_levels-1)
-        boot_x[i] = np.nanmean(x[idx_x], axis=0)
-        boot_y[i] = np.nanmean(y[idx_y], axis=0)
-    boot = np.stack([boot_x,boot_y,boot_x-boot_y], axis=-1) # (n_iter, n_features, 3)
-    p_value, ci = summarize(boot) # (n_features, 3), (2, n_features, 3)
-    return boot, p_value, ci
+    return out
