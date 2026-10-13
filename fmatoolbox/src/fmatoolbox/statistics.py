@@ -264,15 +264,82 @@ def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000
     return {'stat':stat, 'clusters':clusters, 'cluster_stat':cluster_stats, 'p_cluster':p_cluster, 'sig_mask':sig_mask, 'threshold':thresh}
 
 
+def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None, rng=None):
+    """hierarchical bootstrap estimate of the distribution of the mean of nested grouped observations
+    note: this function is a wrapper around utilities of ``hierarch.resampling``, see Kulkarni et al. 2022 https://doi.org/10.1371/journal.pcbi.1010061
+
+    Args:
+        data:      tuple containing datasets for different conditions, each of shape (n_samples_i, n_features_i)
+        groups:    tuple containing hierarchical grouping variables for each condition, each of shape (n_samples_i, n_levels_i),
+                   columns are ordered from outer to deepest level, e.g. groupx[:,0] = subject, groupx[:,1] = trial,
+                   giving the hierarchy: subject -> trial -> observations
+        skip:      levels that should not be resampled, defaults to ()
+        n_iter:    number of bootstrap iterations, defaults to 5000
+        rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
+
+    Returns:
+        means:     bootstrap distribution of the data mean, ignoring nans, shape depends on whether `y` is:
+                   - None, shape (n_iter, n_features) giving the bootstrap distribution of the mean of X
+                   - given, shape (n_iter, n_features, 3), with the last dimension being X, Y, X - Y"""
+
+    # defaults
+    if not isinstance(data, tuple):
+        data = (data,)
+    if not isinstance(groups, tuple):
+        groups = (groups,)
+    if skip is None: skip = ()
+    if n_iter is None: n_iter = 5000
+    if rng is None: rng = np.random.default_rng()
+
+    # bootstrap each condition
+    means = []
+    for i, (d, g) in enumerate(zip(data,groups)):
+
+        # validate shape
+        d, g = np.asarray(d), np.asarray(g)
+        if len(d) != len(g):
+            raise ValueError(f"data[{i}] and groups[{i}] must have the same number of samples (rows)")
+        one_d = d.ndim == 1
+        if one_d: d = d[:,None]
+        if g.ndim == 1: g = g[:,None]
+
+        # handle n-dimensional data
+        trailing = d.shape[1:]
+        d = d.reshape(len(d),-1) # (samples, prod(trailing))
+        keep = ~np.isnan(d).all(axis=1) # drop slices that are entirely NaN
+        d, g = d[keep], g[keep]
+
+        # set up design matrix
+        df = pd.DataFrame(g, columns=[f"group{k}" for k in range(g.shape[1])])
+        df.insert(0, "treatment", 0) # add dummy treatment column
+        df["values"] = np.arange(len(d), dtype=float) # row ids, to keep track of reordering
+        formula = f"values ~ {'/'.join(c for c in df.columns if c != 'values')}"
+        matrix, _ = hierarch.design.design_matrix(df, formula, treatment="treatment")
+        X = matrix.drop(columns=["values","treatment"]).to_numpy(float)
+        order = matrix["values"].to_numpy(int)
+
+        # resample
+        plan = hierarch.resampling.bootstrap_plan(X, skip=skip)
+        w = hierarch.resampling.draw_bootstrap_weights_batch(plan, rng=rng, start=0, kind="weights", size=n_iter)
+        d = d[order]
+        ok = ~np.isnan(d)
+        num = w @ np.where(ok, d, 0.0); den = w @ ok.astype(float)
+        m = np.divide(num, den, out=np.full(num.shape, np.nan), where=den > 0)
+        means.append(m.ravel() if one_d else m.reshape((n_iter,) + trailing))
+
+    return means
+
+
 def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which=None, **kwargs):
     """hierarchical bootstrap test for the difference of mean between conditions
     construct a group-aware bootstrap distribution for the sample means and tests the null hypothesis that the mean of the difference between conditions is zero
+    note: this function is a wrapper around utilities of ``hierarch.stats``, see Kulkarni et al. 2022 https://doi.org/10.1371/journal.pcbi.1010061
 
     Args:
         data:      tuple containing datasets for different conditions, each of shape (n_samples_i, n_levels1 + 1)
         groups:    optional tuple containing hierarchical grouping variables for each condition, each of shape (n_samples_i, n_levels2),
-                   columns ordered from lowest to highest level,
-                   e.g. groupx[:,0] = subject, groupx[:,1] = trial, giving the hierarchy: subject -> trial -> observations
+                   columns are ordered from outer to deeper level, e.g. groupx[:,0] = subject, groupx[:,1] = trial,
+                   giving the hierarchy: subject -> trial -> observations
         names:     optional list of names for each condition, defaults to `range(len(data))`, ignored if data has less than 3 elements
         compare:   test statistic, either "means" (default), "corr", "jackknife_corr", or a Callable
         which:     pairs of datasets to test, when data has more than two elements; if "all" every pairwise comparison will be tested, if a list of lists,
