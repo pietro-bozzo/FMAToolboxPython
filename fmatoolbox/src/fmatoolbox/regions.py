@@ -24,11 +24,11 @@ def _regionDataPath():
 class regions:
     """ Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region """
 
-    def __init__(self,session,ids=None,phases=None,states=None,events=None,load_spikes=True,reload=False,anat_file=None,lfp_anat=None):
+    def __init__(self, session:str|PathLike[str], ids=None, phases=None, states=None, events=None, load_spikes=True, reload:bool=False, anat_file=None, lfp_anat=None):
         """construct a regions object
 
-        arguments:
-            session        file, path to session .xml file
+        Args:
+            session        path to session's .xml file
             ids            (:,) string = None, regions to load (default is all recorded regions)
             phases         (:,) string = None, session phases to load from <basename>.cat.evt file
             states         (:,) string = None, behavioral states to load (they correspond to extensions of files to load)
