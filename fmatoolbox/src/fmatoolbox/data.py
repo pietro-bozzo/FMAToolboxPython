@@ -19,7 +19,7 @@ def loadSpikeTimes(session:str|PathLike[str], output:str='dict', anat_file:str=N
     """load spikes for a session
 
     arguments:
-        session        file, path to session .xml file, spike files must be in session folder
+        session        path to session's .xml file, spike files must be in session folder
         output         string = None, determines output type, either:
                         - 'dict', dictionary of spike times per unit
                         - 'compact', (:,2) array of [timestamps, unit ids]
@@ -304,7 +304,7 @@ def loadEvents(session:str|PathLike[str], extra:str|list[str]):
     # load event files for a session
     #
     # arguments:
-    #     session      string, path to session .xml file, event files must be in session folder
+    #     session      path to session's .xml file, event files must be in session folder
     #     extra        (:) string, extensions of other event files named <basename>.extra[i] to load,
     #                  can be 'subdir/extension' to load '.../basename/subdir/basename.extension'
     #
@@ -366,7 +366,7 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
     """load wideband data for a session, which is organized in records: chunks of data containing one sample for each channel
 
     arguments:
-        session      file, path to session .xml file, .dat file must be in session folder
+        session      path to session's .xml file, .dat file must be in session folder
         dtype        type = np.int16
         channels     (:,) int = None, channels to load, if None, load all channels; counted base 0 as NeuroScope
         intervals    (:,2) float = None, time intervals to load, if None, load all data
@@ -467,12 +467,28 @@ def loadLFP(session:str|PathLike[str]):
     return
 
 
-def saveEvent(session:str|PathLike[str],event,format,columns):
-    """save event in standard FMAT format, prepending metadata header
+def makeAnatFile(session:str|PathLike[str]):
+    """save anat file in standard FMAT format, prepending metadata header"""
+    print('implement!')
 
+    return
+
+
+def saveEvent(session:str|PathLike[str], data, extension, columns):
+    """save an event in standard FMAT format, prepending metadata header
+
+    Args:
+        session:     path to session's .xml file, along which the event file will be created
+        data:        array to save, columns represent different quantities; if 1d, interpreted as one column
+        extension:   extension of event file
+        columns:     names of columns of `data`
     """
 
-    print('implement!')
+    if extension == 'npy' or extension == 'npz':
+        print('implement!')
+    else:
+        fname = pathlib.Path(session).with_suffix(f'.{extension}')
+        np.savetxt(fname, data, delimiter=',', header=f" columns: {', '.join(columns)}", comments="%")
 
     return
 
