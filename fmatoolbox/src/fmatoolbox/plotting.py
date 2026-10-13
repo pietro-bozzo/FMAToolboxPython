@@ -2,6 +2,7 @@
 
 import fmatoolbox
 import numpy as np
+import matplotlib as mpl
 import matplotlib.axes as mpla
 import matplotlib.colors as mplc
 import matplotlib.pyplot as plt
@@ -12,6 +13,8 @@ from matplotlib.axes import Axes
 from matplotlib.typing import ColorType
 from numpy.typing import ArrayLike
 from os import PathLike
+
+mpl.rcParams["font.family"] = "Liberation Sans"
 
 
 def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'):
@@ -26,7 +29,7 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
     elif isinstance(axs,np.ndarray):
         axs = axs.ravel()
 
-    lw = 1 if format == 'paper' else 2
+    lw = 0.6 if format == 'paper' else 2
     ax_title_fs = 7 if format == 'paper' else 18
     ax_label_fs = 7 if format == 'paper' else 18
     ax_label_pad = 0.1 if format == 'paper' else 1
@@ -51,13 +54,13 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
     return
 
 
-def figure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection:str=None, constrained_layout:bool=None, format:Literal['paper','poster']='paper', **kwargs):
+def figure(title:str=None, n:int|tuple[int,int]=None, size:tuple[float,float]=None, projection:str=None, constrained_layout:bool=None, format:Literal['paper','poster']=None, **kwargs):
     """make a figure
 
     Args:
         title:                figure title, defaults to no title
-        n:                    number of subplots' rows and columns, defaults to (1,1)
-        size:                 figure size (cm), defaults to (20,10)
+        n:                    number of subplots' rows and columns, defaults to (1,1); if 0, no axes are drawn and only 'fig' is returned
+        size:                 figure size in cm, defaults to (20,10)
         projection:           projection of axis, defaults to cartesian axis
         constrained_layout:   if True (default), axis sizes are optimized by ``matplotlib.pyplot.subplots`` constrained_layout option
         format:               one of 'paper' or 'poster', 'poster' increases figure size, font sizes, and axes lines' width
@@ -65,52 +68,29 @@ def figure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,1
 
     Returns:
         fig:                  matplotlib figure
-        ax:                   ``matplotlib.axes.Axes`` object or Sequence
+        ax:                   ``matplotlib.axes.Axes`` object or Sequence (optional)
     """
 
+    # defaults
+    if n is None: n = (1,1)
+    if size is None: size = (20,10)
     if constrained_layout is None: constrained_layout = True
-    cm = 1 / 2.54 # inches to centimeter conversion factor
+    if format is None: format = 'paper'
     if format == 'poster':
-        size = [s*2.5 for s in size]
-    fig, ax = plt.subplots(n[0], n[1], figsize=[size[0]*cm,size[1]*cm], constrained_layout=constrained_layout,
-                           subplot_kw={'projection':projection}, **kwargs)
+        size = tuple(s * 2.5 for s in size)
 
-    fig.suptitle(title)
-    adjustAxes(ax,format)
+    # 1. empty figure
+    if n == 0:
+        fig = plt.figure(figsize=(size[0], size[1], 'cm'), **kwargs)
+        fig.suptitle(title)
+        return fig
 
-    return fig, ax
-
-
-def makeFigure(title:str=None, n:tuple[int,int]=[1,1], size:tuple[float,float]=[20,10], projection:str=None, constrained_layout:bool=None, format:Literal['paper','poster']='paper'):
-    """make a figure
-
-    Args:
-        title:                figure title, defaults to no title
-        n:                    number of subplots' rows and columns, defaults to (1,1)
-        size:                 figure size (cm), defaults to (20,10)
-        projection:           projection of axis, defaults to cartesian axis
-        constrained_layout:   if True (default), axis sizes are optimized by ``matplotlib.pyplot.subplots`` constrained_layout option
-        format:               one of 'paper' or 'poster', 'poster' increases figure size, font sizes, and axes lines' width
-
-    Returns:
-        fig:                  matplotlib figure
-        ax:                   Sequence of ``matplotlib.axes.Axes``
-    """
-
-    if constrained_layout is None: constrained_layout = True
-    cm = 1 / 2.54 # inches to centimeter conversion factor
-    if format == 'poster':
-        size = [s*2.5 for s in size]
-    fig, ax = plt.subplots(n[0],n[1],figsize=[size[0]*cm,size[1]*cm],constrained_layout=constrained_layout,subplot_kw=dict(projection=projection))
-
-    # promote single axis to sequence
-    if isinstance(ax,mpla._axes.Axes):
-        ax = [ax]
-
-    fig.suptitle(title)
-    adjustAxes(ax,format)
-
-    return fig, ax
+    # 2. grid of axes
+    else:
+        fig, ax = plt.subplots(n[0], n[1], figsize=(size[0], size[1], 'cm'), constrained_layout=constrained_layout, subplot_kw={'projection':projection}, **kwargs)
+        fig.suptitle(title)
+        adjustAxes(ax, format)
+        return fig, ax
 
 
 def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
@@ -256,7 +236,7 @@ def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axe
 
 
 def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:ArrayLike|Callable|str=None, sortax:int=None,
-                 xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:float=None, bar:str=None, barticks=None, ax:Axes=None, **kwargs):
+                 xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:str|float=None, bar:str=None, barticks=None, ax:Axes=None, **kwargs):
     """plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
@@ -274,7 +254,7 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         smooth          float | (float,float) = None, standard deviation of gaussian kernel passed to ``scipy.ndimage.gaussian_filter`` (after zoom)
         alpha           float | (n,m) float = None, transparency mask for `data` (e.g., to show significance of pixels), values must be in [0,1]
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
-        aspect          float = 3/4, image aspect ratio
+        aspect          str | float | None, same behavior as aspect parameter of imshow
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects
         barticks        (:,) float, if given, draw colorbar next to `ax` with ticks specified by `barticks`, and return both `im` and `cb` objects
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
@@ -334,17 +314,13 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     if ax is None:
         ax = plt.gca()
 
-    if aspect is None: aspect = 3 / 4
-    ax.set_aspect(aspect)
-    im = ax.imshow(data,aspect='auto',vmin=vmin,vmax=vmax,origin='lower',extent=[x[0]-dx,x[-1]+dx,y[0]-dy,y[-1]+dy],**kwargs)
+    im = ax.imshow(data, aspect=aspect, vmin=vmin, vmax=vmax, origin='lower', extent=[x[0]-dx, x[-1]+dx, y[0]-dy, y[-1]+dy], **kwargs)
     if alpha is not None:
         im.set_alpha(alpha)
     if bar is not None or barticks is not None:
         cb = plt.colorbar(im, label=bar, ticks=barticks, ax=ax)
-        label_fs = ax.xaxis.label.get_fontsize()
-        cb.set_label(bar, fontsize=label_fs)
-        tick_fs = ax.xaxis.get_ticklabels()[0].get_fontsize()
-        cb.ax.tick_params(labelsize=tick_fs)
+        cb.set_label(bar)
+        adjustAxes(cb.ax)
 
     # plot peaks
     if isinstance(sortby,str) and sortby == 'peak-show':
