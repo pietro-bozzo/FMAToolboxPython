@@ -409,7 +409,7 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which
     df = pd.concat(frames, ignore_index=True)
 
     # set up design matrix for null-hypothesis testing
-    formula = f"values ~ {'/'.join(c for c in df.columns if c != "values")}"
+    formula = f"values ~ {'/'.join(c for c in df.columns if c != 'values')}"
     matrix, treatment_col = hierarch.design.design_matrix(df, formula, treatment='treatment')
 
     if len(data) == 1:
