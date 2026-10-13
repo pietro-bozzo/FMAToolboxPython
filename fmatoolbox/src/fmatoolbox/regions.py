@@ -452,6 +452,7 @@ class regions:
     def spikes(self,regs=None,e_groups=None,when=None,shift=False):
         '''
         get pooled spikes samples for a list regions
+        NOTE: explain that the f returns spikes coming form union of 'regs' and 'e_groups'
 
         arguments:
             regs        (:,) string = None, regions to fetch spikes for, default is all regions
@@ -574,17 +575,19 @@ class regions:
         return firing_rate
     
 
-    def avalanches(self, regs=None, when=None, shift:bool=None, thresh:float=None, window:float=None, step:int=None, smooth:bool=None, norm:bool=None, return_fr:bool=None):
+    def avalanches(self, regs=None, when=None, thresh:float=None, bin_mode:Literal['fixed','isi']=None, window:float=None, step:int=None,
+                   shift:bool=None, smooth:bool=None, norm:bool=None, return_fr:bool=None):
         """compute avalanches per region from population firing rate
 
         arguments:
             regs         (r,) str = None, brain regions, default is all loaded regions
             when         DESCRIBE, same input as eventIntervals
-            shift        bool = False, shift epochs together in time after filtering by state
             thresh       float = 30, percentile to use as threshold, must be in [0,100]
-            window       either: float = 0.05 s, bin size to count spikes; or 'isi', to use average inter-spike interval per region
+            bin_mode     str, either 'fixed' or 'isi', changes how 'window' is used
+            window       float = 0.05 s, bin size to count spikes; if 'isi', use 'window' * average inter-spike interval per region
             step         float = 1, firing rate is computed in windows of length 'binSize' and overlap 'binSize' / 'step',
                          default is no overlap
+            shift        bool = False, shift epochs together in time after filtering by state
             smooth       float = None, gaussian kernel std to smooth rate over time before finding avalanches
             norm         bool = False, normalize by neuron number per region
 
@@ -596,17 +599,19 @@ class regions:
         """
 
         if thresh is None: thresh = 30
+        if bin_mode is None: bin_mode = 'fixed'
         regs, _, _ = self._checkIDs(regs=regs)
 
         size = {}
         intervals = {}
         size_t = {}
         
-        # 1. bin: average inter-spike interval
-        if isinstance(window, str) and window == 'isi':
+        # 1. bin: 'window' * average inter-spike interval
+        if bin_mode == 'isi':
+            if window is None: window = 1
             bin = []
             for i, r in enumerate(regs):
-                isi = np.diff(self.spikes(regs=r,when=when,shift=True)[:,0]).mean()
+                isi = window * np.diff(self.spikes(regs=r,when=when,shift=True)[:,0]).mean().item()
                 bin.append(isi)
                 fr = self.firingRate(regs=r,when=when,shift=shift,window=isi,step=step,smooth=smooth,norm=norm)
                 size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
