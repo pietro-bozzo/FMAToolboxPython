@@ -2,10 +2,8 @@
 
 import numpy as np
 import scipy as sp
-import pandas as pd
-import hierarch
 import statsmodels.stats.multitest
-from typing import Literal
+from typing import Literal, Iterable
 
 
 def MCpValue(surrogate,observed,alternative:Literal['two-sided','greater','less']=None):
@@ -280,7 +278,14 @@ def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None
     Returns:
         means:     bootstrap distribution of the data mean, ignoring nans, shape depends on whether `y` is:
                    - None, shape (n_iter, n_features) giving the bootstrap distribution of the mean of X
-                   - given, shape (n_iter, n_features, 3), with the last dimension being X, Y, X - Y"""
+                   - given, shape (n_iter, n_features, 3), with the last dimension being X, Y, X - Y
+    """
+
+    try:
+       import hierarch
+       import pandas as pd
+    except ImportError as e:
+       raise ImportError('hierarchicalBootstrap requires hierarch, did you do: pip install "fmatoolbox[hierarch]" ?') from e
 
     # defaults
     if not isinstance(data, tuple):
@@ -356,6 +361,12 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which
                    - 2: float, p value for the null hypothesis between the two conditions
                    - 3 or more: pandas DataFrame with columns condtion1, condition2, p value, corrected p value
     """
+
+    try:
+       import hierarch
+       import pandas as pd
+    except ImportError as e:
+       raise ImportError('hierarchicalBootstrapTest requires hierarch, did you do: pip install "fmatoolbox[hierarch]" ?') from e
 
     # defaults
     if not isinstance(data, tuple):
