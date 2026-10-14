@@ -237,6 +237,9 @@ def restrict(samples, intervals, shift:bool=None, s_ind:bool=None, i_ind:bool=No
         Ii           (n) bool, optional, indicese of intervals which contain kept samples
     """
 
+    if s_ind is None: s_ind = False
+    if i_ind is None: i_ind = False
+
     # promote 1d arrays to 2d
     samples = np.asarray(samples)
     squeeze = samples.ndim == 1
@@ -247,10 +250,10 @@ def restrict(samples, intervals, shift:bool=None, s_ind:bool=None, i_ind:bool=No
     intervals = consolidate(intervals)
 
     # assign and index to each sample time, only odd indeces belong to intervals
-    ind = np.digitize(samples[:,0],intervals.flatten())
-    Is = (ind % 2).astype(bool)  # Is[i] is 1 iff samples[i] must be kept
+    ind = np.digitize(samples[:,0], intervals.flatten())
+    Is = (ind % 2).astype(bool) # Is[i] is 1 iff samples[i] must be kept
     samples = samples[Is]
-    Ii = (ind[Is] - 1) // 2  # Ii[j] indexes interval that contains samples[Is][j]
+    Ii = (ind[Is] - 1) // 2 # Ii[j] indexes interval that contains samples[Is][j]
 
     if shift:
         # cumulative shifts: distances between intervals
@@ -265,7 +268,7 @@ def restrict(samples, intervals, shift:bool=None, s_ind:bool=None, i_ind:bool=No
 
     if not s_ind and not i_ind:
         return samples
-    out = (samples,Is,Ii)  # prepare tuple to return requested outputs
+    out = (samples,Is,Ii) # prepare tuple to return requested outputs
     return out[:2 + i_ind:2 - s_ind]
 
 
