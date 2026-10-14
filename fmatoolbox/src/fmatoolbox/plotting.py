@@ -100,7 +100,7 @@ def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,ColorType]=None, xtick
     #     axs             iterable of matplotlib.axes.Axes
     #     xlabelcolor     dict of {index: color}, color for the i-th xlabel, where index is i
     #     xtickvisible    dict of {index: bool}, whether to show the i-th major xtick, where index is i
-    #     **kwargs        all extra key-word arguments are passed to matplotlib.pyplot.set()
+    #     **kwargs        all extra key-word arguments are passed to ``matplotlib.pyplot.set``
 
     # promote single axis to sequence
     if isinstance(axs,mpla._axes.Axes):
@@ -125,13 +125,23 @@ def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,ColorType]=None, xtick
     return
 
 
-def saveFigure(fig, fname:str|PathLike[str], format:str|Iterable[str]):
+def saveFigure(fig, fname:str|PathLike[str], format:str|Iterable[str], bbox_inches=None):
+    """save a figure
+       construct a group-aware bootstrap distribution for the sample means and tests the null hypothesis that the mean of the difference between conditions is zero
+       note: this function is a wrapper around utilities of ``hierarch.stats``, see Kulkarni et al. 2022 https://doi.org/10.1371/journal.pcbi.1010061
+
+       Args:
+           fig:          matplotlib figure object
+           fname:        path to output file
+           format:       optional list of names for each condition, defaults to `range(len(data))`, ignored if data has less than 3 elements
+           bbox_inches:  portion of figure to save, if 'tight', try to figure out the tight bbox of the figure
+       """
 
     # promote single format to iterable
-    if isinstance(format,str):
+    if isinstance(format, str):
         format = (format,)
     for f in format:
-        fig.savefig(str(fname)+'.'+f,transparent=True,bbox_inches='tight',pad_inches=0,format=f,dpi=200)
+        fig.savefig(str(fname)+'.'+f, transparent=True, bbox_inches=bbox_inches, pad_inches=0, format=f, dpi=200)
 
     return
 
@@ -464,21 +474,22 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
 
 
 def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['box','violin','scatter','link']|Collection[str]=None, color:ColorType|Collection[ColorType]=None,
-            label:str|Sequence[str]=None, ax:Axes=None):
+            label:str|Sequence[str]=None, ax:Axes=None, **kwargs):
     """draw box plots to represent groups of datasets
     note: calls matplotlib's boxplot, which sets xticks
 
     Args:
-        data:   groups of datasets to plot, same format as ``matplotlib.pyplot.boxplot`` `x` argument, an array or a sequence of array-like vectors, one per dataset
-        x:      positions for each drawn distribution, defaults to `range(n_data)`
-        mode:   one or more of the following options, which will be drawn together:
-                - 'box', box-and-whiskers plots per dataset, default
-                - 'violin', violin plots per dataset
-                - 'scatter', scatter plots of data points of each dataset
-                - 'link, lines between data points of each adjacent dataset
-        color:  color for boxes, violins, and scatter plots, one per dataset or a single one for all, defaults to blue
-        label:  xtick label below each plotted distribution, defaults to no labels
-        ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
+        data:    groups of datasets to plot, same format as ``matplotlib.pyplot.boxplot`` `x` argument, an array or a sequence of array-like vectors, one per dataset
+        x:       positions for each drawn distribution, defaults to `range(n_data)`
+        mode:    one or more of the following options, which will be drawn together:
+                 - 'box', box-and-whiskers plots per dataset, default
+                 - 'violin', violin plots per dataset
+                 - 'scatter', scatter plots of data points of each dataset
+                 - 'link, lines between data points of each adjacent dataset
+        color:   color for boxes, violins, and scatter plots, one per dataset or a single one for all, defaults to blue
+        label:   xtick label below each plotted distribution, defaults to no labels
+        ax:      axes to plot in, defaults to ``matplotlib.pyplot.gca()``
+        kwargs:  all extra key-word arguments are passed to the corresponding matplotlib function
 
     Returns:
         list of respective outputs of functions called per mode, same length as `mode`
@@ -527,8 +538,8 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         boxprops = {'linewidth': lw}
         flierprops = {'marker': '.','markerfacecolor': 'black','markersize': mksz}
 
-        bp = ax.boxplot(data_clean,patch_artist=True,positions=x,boxprops=boxprops,medianprops=medianprops,whiskerprops={'linewidth':lw},
-                        capprops={'linewidth':lw},flierprops=flierprops)
+        bp = ax.boxplot(data_clean, patch_artist=True, positions=x, boxprops=boxprops, medianprops=medianprops, whiskerprops={'linewidth':lw},
+                        capprops={'linewidth':lw}, flierprops=flierprops, **kwargs)
         for box, col in zip(bp["boxes"],color):
             r, g, b, a = mplc.to_rgba(col)
             boxprops['facecolor'] = (r, g, b, a * 0.2)
@@ -542,7 +553,9 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         for col in color:
             r, g, b, a = mplc.to_rgba(col)
             facecolor.append((r,g,b,a*0.5))
-        vp = ax.violinplot(data_clean,positions=x,widths=0.8,side='high',facecolor=facecolor,linecolor=color,showmedians=True,showextrema=False)
+        kwargs.setdefault('widths', 0.8)
+        vp = ax.violinplot(data_clean, positions=x, side='high', facecolor=facecolor, linecolor=color,
+                           showmedians=True, showextrema=False, **kwargs)
         out.append(vp)
 
     # following plots use original data and are unaffected by nans
