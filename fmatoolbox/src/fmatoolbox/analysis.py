@@ -1,6 +1,6 @@
-''' Specialized analyses for FMAToolbox '''
+""" Specialized analyses for FMAToolbox """
 
-import fmatoolbox.general
+import fmatoolbox.intervals
 import numpy as np
 import scipy as sp
 import statsmodels.stats.multitest
@@ -553,7 +553,7 @@ def cellAssembliesICA(spikes, window:float=None, when=None, drop_mix:bool=False)
    time = raster[:,0]
    n = raster[:,1:] # discard time column
    if when is not None:
-       time, valid = fmatoolbox.general.restrict(time,when,s_ind=True)
+       time, valid = fmatoolbox.intervals.restrict(time,when,s_ind=True)
        n = n[valid]
 
    # remove units which never spiked to avoid cov error
