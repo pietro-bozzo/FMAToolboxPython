@@ -9,7 +9,9 @@ import fmatoolbox.data
 import fmatoolbox.intervals
 import warnings
 import xml.etree.ElementTree
+from os import PathLike
 from collections.abc import Iterable
+from typing import Literal
 
 
 def _regionDataPath():
