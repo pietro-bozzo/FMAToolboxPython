@@ -1,4 +1,4 @@
-''' Functions to load data for a recording session '''
+""" Functions to load data for a recording session """
 
 import pathlib
 import scipy.io
@@ -242,80 +242,130 @@ def saveRegionSpikes(file:str|PathLike[str], spikes):
     return
 
 
-def loadEventFile(filename:str|PathLike[str], compact:bool=False):
-    # load events from a .evt file
-    #
-    # arguments:
-    #     filename    file, .evt file, each line must have format 'beginning of basename_event1_1'
-    #     compact     bool = false, if true, return events as compact dictionary
-    #
-    # output:
-    #     events      dict, keys are either 'times' and 'descriptions' or event names if 'compact' = True
+def loadEventFile(filename:str|PathLike[str], compact:bool=None):
+    """load an event file, accepted formats:
+    - .npy: each column of the array is returned as a value in `events` (single event)
+    - .npz: each array of the archive is returned as an event in `events`
+    - .mat: DESCRIBE
+    - .evt: text file where each line must have format 'beginning of basename_event1_1' or 'end of basename_event1_1'
+    - other extensions: interpreted as text files, as produced by ``saveEvent``
 
-    with open(filename,'r') as f:
-        lines = f.read().splitlines()
+    Args:
+        filename:   file to read
+        compact:    if True, for .npz files, return a single event instead of a dict of events, for .evt files, return a
+                    compact dictionary; ignored otherwise, defaults to True
 
-    # extract first non-whitespace token
-    times = [line.split()[0] for line in lines]
-    times = np.array([float(t) / 1000.0 for t in times]) # convert to seconds
+    Returns:
+        events:     either a single event (a dict) or a dict of events (a dict of dict)
+                    in general, an event is a dict of type {'name': 1d np array}
+    """
 
-    # remove first token and following whitespace
-    descriptions = []
-    for line in lines:
-        parts = line.split(maxsplit=1)
-        descriptions.append(parts[1] if len(parts) > 1 else '')
+    if compact is None: compact = True
+    def event_dict(data, columns=None):
+        if columns is None: columns = ['col0'] if data.ndim == 1 else [f'col{i}' for i in range(data.shape[1])]
+        return {columns[0]: data} if data.ndim == 1 else {columns[i]: data[:,i] for i in range(data.shape[1])}
 
-    if compact:
-        # group by events, description is of type 'beginning of basename_event1' or 'beginning of basename_event1_1'
-        events = {} #collections.defaultdict(lambda: collections.defaultdict(list))
-        for t, d in zip(times,descriptions):
-            if " of " not in d:
-                raise fmatoolbox.exceptions.FileFormatError(f"Unexpected format: '{d}'")
-            phase, full_id = d.split(" of ",1)
-            phase = phase.strip()
-            full_id = full_id.strip()
-            # remove trailing 'bis' and '_1'
-            if full_id.endswith('bis'):
-                full_id = full_id[:-3]
-            parts = full_id.split('_')
-            try:
-                if parts[-1].isdigit():
-                    part = parts[-2]
-                else:
-                    part = parts[-1]
-            except:
-                raise ValueError(f"Invalid event ID format: '{full_id}'")
-            event_id = part
-            # concatenate values
-            if event_id in events:
-                if phase in events[event_id]:
-                    events[event_id][phase].append(t)
-                else:
-                    events[event_id][phase] = [t]
+    filename = pathlib.Path(filename)
+    format = filename.suffix
+    match format:
+
+        # 1. npy file
+        case '.npy':
+            events = event_dict(np.load(filename))
+
+        # 2. npz file
+        case '.npz':
+            with np.load(filename) as data:
+                events = dict(data) if compact else {d: event_dict(data[d]) for d in data}
+
+        # 3. MATLAB's mat file
+        case '.mat':
+            name = filename.name.removesuffix(".events.mat").rsplit(".",1)[-1]
+            events = {name: scipy.io.loadmat(filename, simplify_cells=True)[name]}
+
+        # 4. evt file (retrocompatibility)
+        case '.evt':
+            with open(filename,'r') as f:
+                lines = f.read().splitlines()
+
+            # extract first non-whitespace token
+            times = [line.split()[0] for line in lines]
+            times = np.array([float(t) / 1000.0 for t in times]) # convert to seconds
+
+            # remove first token and following whitespace
+            descriptions = []
+            for line in lines:
+                parts = line.split(maxsplit=1)
+                descriptions.append(parts[1] if len(parts) > 1 else '')
+
+            if compact:
+                # group by events, description is of type 'beginning of basename_event1' or 'beginning of basename_event1_1'
+                events = {}
+                for t, d in zip(times,descriptions):
+                    if " of " not in d:
+                        raise fmatoolbox.exceptions.FileFormatError(f"Unexpected format: '{d}'")
+                    phase, full_id = d.split(" of ",1)
+                    phase = phase.strip()
+                    full_id = full_id.strip()
+                    # remove trailing 'bis' and '_1'
+                    if full_id.endswith('bis'):
+                        full_id = full_id[:-3]
+                    parts = full_id.split('_')
+                    try:
+                        if parts[-1].isdigit():
+                            part = parts[-2]
+                        else:
+                            part = parts[-1]
+                    except:
+                        raise ValueError(f"Invalid event ID format: '{full_id}'")
+                    event_id = part
+                    # concatenate values
+                    if event_id in events:
+                        if phase in events[event_id]:
+                            events[event_id][phase].append(t)
+                        else:
+                            events[event_id][phase] = [t]
+                    else:
+                        events[event_id] = {phase : [t]}
             else:
-                events[event_id] = {phase : [t]}
-    else:
-        events = { 'time': times, 'description': descriptions }
+                events = {'time':times, 'description':descriptions}
+
+        # 5. text file
+        case _:
+            data = np.loadtxt(filename, comments='%', delimiter=',', ndmin=2)
+            # try reading column names from header
+            columns = [f'col{i}' for i in range(data.shape[1])]
+            with filename.open('r') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line.startswith('%'):
+                        break
+                    line = line.removeprefix('%').strip()
+                    if line.startswith('columns:'):
+                        for i, c in enumerate(line.removeprefix('columns:').split(',')):
+                            columns[i] = c.strip()
+            events = {columns[i]: data[:,i] for i in range(data.shape[1])}
 
     return events
 
 
 def loadEvents(session:str|PathLike[str], extra:str|list[str]):
-    # load event files for a session
-    #
-    # arguments:
-    #     session      path to session's .xml file, event files must be in session folder
-    #     extra        (:) string, extensions of other event files named <basename>.extra[i] to load,
-    #                  can be 'subdir/extension' to load '.../basename/subdir/basename.extension'
-    #
-    # output:
-    #     events       dict, keys are event names
-    #     cat_names    (:) string, names of events contained in <basename>.cat.evt
+    """load event files for a session
+
+    Args:
+        session:    path to session's .xml file, event files must be in session folder
+        extra:      (:) string, extensions of other event files named <basename>.extra[i] to load,
+                    can be 'subdir/extension' to load '.../basename/subdir/basename.extension'
+
+    Returns:
+        events:     dict, keys are event names
+        cat_names:  (:) string, names of events contained in <basename>.cat.evt
+    """
 
     session = pathlib.Path(session)
     file_root = session.parent
     # accept single string input
-    if isinstance(extra,str):
+    if isinstance(extra, str):
         extra = [extra]
 
     # load all *.evt files
@@ -323,13 +373,13 @@ def loadEvents(session:str|PathLike[str], extra:str|list[str]):
     cat_names = []
     for file in file_root.glob("*.evt"):
         try:
-            events.update(loadEventFile(file,compact=True))
+            events.update(loadEventFile(file, compact=True))
         except fmatoolbox.exceptions.FileFormatError:
             pass
         if str(file)[-8:] == '.cat.evt':
             cat_names = list(events.keys())
 
-    # load other file types
+    # load other file types         TO DO: add npy support, use loadEventFile for mat files as well
     for extension in extra:
         # handle subfolders, e.g., 'subfolder/name'
         e = pathlib.Path(extension).name
@@ -337,18 +387,61 @@ def loadEvents(session:str|PathLike[str], extra:str|list[str]):
         this_froot = file_root / p / session.stem
         if this_froot.with_suffix(f'.{e}.npz').exists():
             # load .npz file
-            data = np.load(this_froot.with_suffix(f'.{e}.npz'))
-            for d in data:
-                events[d] = {f'col{i}': data[d][:,i] for i in range(data[d].shape[1])}
+            _e = loadEventFile(this_froot.with_suffix(f'.{e}.npz'), compact=False)
+            events.update(_e)
         elif this_froot.with_suffix(f'.{e}.events.mat').exists():
             # load .events.mat file
             events[e] = scipy.io.loadmat(this_froot.with_suffix(f'.{e}.events.mat'),simplify_cells=True)[e]
         else:
             # load text file
-            data = np.loadtxt(this_froot.with_suffix(f'.{e}'),comments='%',delimiter=',',ndmin=2)
-            events[e] = {f'col{i}': data[:,i] for i in range(data.shape[1])}
+            events[e] = loadEventFile(this_froot.with_suffix(f'.{e}'))
 
     return events, cat_names
+
+
+def saveEvent(session:str|PathLike[str], format:str, data, columns=None, name=None):
+    """save an event in standard FMAT format
+
+    Args:
+        session:    path to session's .xml file, along which the event file will be created
+        format:     format of event file, either:
+                    - 'npy': DESCRIBE
+                    - 'npz': DESCRIBE
+                    - 'name.np#': shorthand for format='np#', name='name'
+                    - a different str, to save the event as a text file named <basename>.<format>, prepending a metadata header
+                      in this case, `data` must be an array whose columns represent different quantities; if 1d, interpreted as one column
+        data:       array to save; for npz format, must be a dict of {'name': array}
+        columns:    names of columns of `data`, mandatory for text formats, ignored otherwise
+        name:       event name used to construct the output file name, ignored for text formats, mandatory otherwise
+
+    Examples:
+        # save <basename>.sleep in text format containing two events: 'onset' and 'offset'
+        saveEvent(session, 'sleep', [[1,2]], columns=['onset','offset'])
+
+        # save the same as <basename>.sleep.npz
+        saveEvent(session, 'npz', {'onset':[1,2], 'offset':[1.5,3]}, name='sleep')
+        # or
+        saveEvent(session, 'sleep.npz', {'onset':[1,2], 'offset':[1.5,3]})
+    """
+
+    # parse format
+    parts = format.rsplit('.', 1)
+    format = parts[-1]
+    if len(parts) > 1: name = parts[0]
+
+    if format == 'npy' or format == 'npz':
+        if name is None:
+            raise ValueError(f"'name' must be specified for {format} format")
+        fname = pathlib.Path(session).with_suffix(f'.{name}.{format}')
+        np.save(fname, data) if format == 'npy' else np.savez(fname, **data)
+
+    else:
+        if columns is None:
+            raise ValueError("'columns' must be specified for text formats")
+        fname = pathlib.Path(session).with_suffix(f'.{format}')
+        np.savetxt(fname, data, delimiter=',', header=f" columns: {', '.join(columns)}", comments="%")
+
+    return
 
 
 def loadSpikeWaveforms(session:str|PathLike[str]):
@@ -470,29 +563,6 @@ def loadLFP(session:str|PathLike[str]):
 def makeAnatFile(session:str|PathLike[str]):
     """save anat file in standard FMAT format, prepending metadata header"""
     print('implement!')
-
-    return
-
-
-def saveEvent(session:str|PathLike[str], format:str, data, columns):
-    """save an event in standard FMAT format
-
-    Args:
-        session:    path to session's .xml file, along which the event file will be created
-        format:     format of event file, either:
-                    - 'npy': to implement
-                    - 'npz': to implement
-                    - a different str, to save the event as a text file named <basename>.<format>, prepending a metadata header
-                      in this case, `data` must be an array whose columns represent different quantities; if 1d, interpreted as one column
-        data:       array to save
-        columns:    names of columns of `data`
-    """
-
-    if extension == 'npy' or extension == 'npz':
-        print('implement!')
-    else:
-        fname = pathlib.Path(session).with_suffix(f'.{extension}')
-        np.savetxt(fname, data, delimiter=',', header=f" columns: {', '.join(columns)}", comments="%")
 
     return
 
