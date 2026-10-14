@@ -1,6 +1,7 @@
 """Plotting utilities for publication grade figures"""
 
-import fmatoolbox
+import fmatoolbox.analysis
+import fmatoolbox.intervals
 import numpy as np
 import matplotlib as mpl
 import matplotlib.axes as mpla
@@ -693,7 +694,7 @@ def pHorzLine(p, t=None, dy=None, color:ColorType=None, ax:Axes=None, **kwargs):
 
 def plotIntervals(intervals, color:ColorType='gray', alpha=0.3, label:str=None, ax:Axes=None, **plot_kwargs):
 
-    intervals = fmatoolbox.general.consolidateIntervals(intervals)
+    intervals = fmatoolbox.intervals.consolidateIntervals(intervals)
     if intervals.size == 0:
         return
     if ax is None:

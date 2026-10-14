@@ -1,6 +1,7 @@
-''' Preprocessing routines for electrophysiological data '''
+""" Preprocessing routines for electrophysiological data """
 
 import fmatoolbox.analysis
+import fmatoolbox.intervals
 import numpy as np
 
 
@@ -30,7 +31,7 @@ def corticalDownStates(spikes, n:int=None, silence:float=None, return_fr=None):
     durations = distances[is_down]
 
     # if two down states intersect, take longest one
-    _, is_overlap = fmatoolbox.general.restrict(down[:,1]+1e-10,down,s_ind=True) # downs which overlap with next one
+    _, is_overlap = fmatoolbox.intervals.restrict(down[:,1]+1e-10,down,s_ind=True) # downs which overlap with next one
     keep = np.full_like(is_overlap,True)
     remove = np.where(is_overlap)[0] # remove[i] is idx of down to drop
     change = durations[remove] > durations[remove+1] # change remove[i] if next down is smaller

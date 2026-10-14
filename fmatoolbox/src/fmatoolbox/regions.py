@@ -73,12 +73,12 @@ class regions:
         self.states = {s: np.stack((loaded_events[s]['col0'],loaded_events[s]['col1']),axis=1) for s in states}
         if self.phases:
             # restrict states to session epochs
-            self.states = {s: fmatoolbox.general.restrict(self.states[s],epoch_intervals) for s in self.states}
+            self.states = {s: fmatoolbox.intervals.restrict(self.states[s],epoch_intervals) for s in self.states}
             # build special states 'all' and 'other'
             self.states['all'] = np.array([[self.phases[list(self.phases)[0]][0,0],self.phases[list(self.phases)[-1]][-1,-1]]])
             self.states['other'] = self.states['all']
             for name in states:
-                self.states['other'] = fmatoolbox.general.subtractIntervals(self.states['other'],self.states[name])
+                self.states['other'] = fmatoolbox.intervals.subtractIntervals(self.states['other'],self.states[name])
 
         # 4. assign events
         self.events = {}
@@ -106,7 +106,7 @@ class regions:
 
                 # restrict to session epochs
                 if not self.all_epochs:
-                    _, valid = fmatoolbox.general.restrict(e['intervals'],epoch_intervals,s_ind=True)
+                    _, valid = fmatoolbox.intervals.restrict(e['intervals'],epoch_intervals,s_ind=True)
                     e = {k: v[valid] for k, v in e.items() if len(v) == len(valid)}
 
                 self.events[name] = e
@@ -136,7 +136,7 @@ class regions:
             if not self.all_epochs:
                 # restrict spikes to session phases
                 for id in self.ids:
-                    self.region[id]['spikes'] = fmatoolbox.general.restrict(self.region[id]['spikes'],epoch_intervals)
+                    self.region[id]['spikes'] = fmatoolbox.intervals.restrict(self.region[id]['spikes'],epoch_intervals)
 
         # 6. load electrode groups and channels per region
         if lfp_anat is None:
@@ -338,10 +338,10 @@ class regions:
                 raise ValueError(f'None of the following was found: {ev}')
             union = fmatoolbox.intervals.consolidate(np.concatenate(union),eps=epsilon) if len(union) else np.empty((0,2))
             subtraction = fmatoolbox.intervals.consolidate(np.concatenate(subtraction),eps=epsilon) if len(subtraction) else np.empty((0,2))
-            intervals.append(fmatoolbox.general.subtractIntervals(union,subtraction))
+            intervals.append(fmatoolbox.intervals.subtractIntervals(union,subtraction))
 
         # 2. intersection across different evs
-        intervals = fmatoolbox.general.intersectIntervals(intervals)
+        intervals = fmatoolbox.intervals.intersectIntervals(intervals)
         if duration is not None and duration != 0:
             intervals = fmatoolbox.intervals.trim(intervals,duration=duration,fast=True,eps=epsilon)
 
@@ -480,7 +480,7 @@ class regions:
         spikes = np.concatenate(spikes)
         # restrict to 'when'
         if when is not None:
-            spikes = fmatoolbox.general.restrict(spikes,self.eventIntervals(when),shift=shift)
+            spikes = fmatoolbox.intervals.restrict(spikes,self.eventIntervals(when),shift=shift)
         # sort by time
         spikes = spikes[spikes[:,0].argsort()]
 
@@ -531,7 +531,7 @@ class regions:
 
         # restrict to 'when'
         if do_restrict:
-            firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
+            firing_rate = fmatoolbox.intervals.restrict(firing_rate,when,shift=shift)
 
         # normalize
         if norm:
@@ -572,7 +572,7 @@ class regions:
 
         # restrict to 'when'
         if do_restrict:
-            firing_rate = fmatoolbox.general.restrict(firing_rate,when,shift=shift)
+            firing_rate = fmatoolbox.intervals.restrict(firing_rate,when,shift=shift)
 
         return firing_rate
     
