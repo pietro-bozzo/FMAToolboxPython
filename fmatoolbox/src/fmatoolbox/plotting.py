@@ -88,7 +88,8 @@ def figure(title:str=None, n:int|tuple[int,int]=None, size:tuple[float,float]=No
 
     # 2. grid of axes
     else:
-        fig, ax = plt.subplots(n[0], n[1], figsize=(size[0], size[1], 'cm'), constrained_layout=constrained_layout, subplot_kw={'projection':projection}, **kwargs)
+        cm = 1 / 2.54 # inches to centimeter conversion factor
+        fig, ax = plt.subplots(n[0], n[1], figsize=(size[0]*cm, size[1]*cm), constrained_layout=constrained_layout, subplot_kw={'projection':projection}, **kwargs)
         fig.suptitle(title)
         adjustAxes(ax, format)
         return fig, ax
