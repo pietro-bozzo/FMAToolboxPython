@@ -24,15 +24,15 @@ def _regionDataPath():
 
 
 class regions:
-    """ Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region """
+    """Handler for multi-region spiking data, stores session metadata and computes quantities such as firing rate per region"""
 
-    def __init__(self, session:str|PathLike[str], ids=None, phases=None, states=None, events=None, load_spikes=True, reload:bool=False, anat_file=None, lfp_anat=None):
+    def __init__(self, session:str|PathLike[str], ids=None, epochs=None, states=None, events=None, load_spikes=True, reload:bool=False, anat_file=None, lfp_anat=None):
         """construct a regions object
 
         Args:
             session        path to session's .xml file
             ids            (:,) string = None, regions to load (default is all recorded regions)
-            phases         (:,) string = None, session phases to load from <basename>.cat.evt file
+            epochs         (:,) string = None, session epochs to load from <basename>.cat.evt file
             states         (:,) string = None, behavioral states to load (they correspond to extensions of files to load)
             events         (:,) string = None, additional events to load (they correspond to extensions of files to load)
             load_spikes    bool = True, load spikes (False allows to access events without costly spike loading)
@@ -47,35 +47,31 @@ class regions:
         self.rat = self.basename[3:6]
 
         # 1. load events
-        self.all_epochs = phases is None # True if user did not restrict to some recording epochs
-        if states is None:
-            states = []
-        elif isinstance(states,str):
-            states = [states]
-        if events is None:
-            events = []
-        elif isinstance(events,str):
-            events = [events]
-        if isinstance(phases,str):
-            phases = [phases]
-        loaded_events, phase_names = fmatoolbox.data.loadEvents(session,extra=states+events)
+        def to_list(s): return [s] if isinstance(s, str) else list(s)
+        self.all_epochs = epochs is None # True if user did not restrict to some recording epochs
+        if states is None: states = []
+        states = to_list(states)
+        if events is None: events = []
+        events = to_list(events)
+        if epochs is not None: epochs = to_list(epochs)
+        loaded_events, epoch_names = fmatoolbox.data.loadEvents(session, extra=states+events)
         states = [s.rsplit('/',1)[-1] for s in states] # remove everything before '/' in every event
         events = [e.rsplit('/',1)[-1] for e in events]
 
         # 2. assign session epochs
-        matches = self._matchEvents(phase_names,phases)[0] if phases else phase_names
-        self.phases = {m: np.stack((loaded_events[m]['beginning'],loaded_events[m]['end']),axis=1) for m in matches}
-        if not self.all_epochs and len(self.phases) == 0:
-            raise ValueError(f'none of {phases} was found')
-        epoch_intervals = np.concatenate(list(self.phases.values())) if self.phases else np.empty((0,2))
+        matches = self._matchEvents(epoch_names, epochs)[0] if epochs else epoch_names
+        self.epochs = {m: np.stack((loaded_events[m]['beginning'],loaded_events[m]['end']),axis=1) for m in matches}
+        if not self.all_epochs and len(self.epochs) == 0:
+            raise ValueError(f'none of {epochs} was found')
+        epoch_intervals = np.concatenate(list(self.epochs.values())) if self.epochs else np.empty((0,2))
 
         # 3. assign states
         self.states = {s: np.stack((loaded_events[s]['col0'],loaded_events[s]['col1']),axis=1) for s in states}
-        if self.phases:
+        if self.epochs:
             # restrict states to session epochs
             self.states = {s: fmatoolbox.intervals.restrict(self.states[s],epoch_intervals) for s in self.states}
             # build special states 'all' and 'other'
-            self.states['all'] = np.array([[self.phases[list(self.phases)[0]][0,0],self.phases[list(self.phases)[-1]][-1,-1]]])
+            self.states['all'] = np.array([[self.epochs[list(self.epochs)[0]][0,0],self.epochs[list(self.epochs)[-1]][-1,-1]]])
             self.states['other'] = self.states['all']
             for name in states:
                 self.states['other'] = fmatoolbox.intervals.subtractIntervals(self.states['other'],self.states[name])
@@ -83,7 +79,7 @@ class regions:
         # 4. assign events
         self.events = {}
         for name in loaded_events:
-            if name not in phase_names and name not in states:
+            if name not in epoch_names and name not in states:
                 e = loaded_events[name]
 
                 attributes = list(e.keys())
@@ -134,7 +130,7 @@ class regions:
             else:
                 self.ids = np.array(list(self.region.keys()),dtype=str)
             if not self.all_epochs:
-                # restrict spikes to session phases
+                # restrict spikes to session epochs
                 for id in self.ids:
                     self.region[id]['spikes'] = fmatoolbox.intervals.restrict(self.region[id]['spikes'],epoch_intervals)
 
@@ -300,7 +296,7 @@ class regions:
 
         # 1. default output
         if events is None:
-            return np.concatenate(list(self.phases.values())) if self.phases else np.full((1,2),np.nan)
+            return np.concatenate(list(self.epochs.values())) if self.epochs else np.full((1,2),np.nan)
 
         # 2. numeric intervals
         try:
@@ -324,8 +320,8 @@ class regions:
 
             union = []
             subtraction = []
-            for match, negation in zip(*self._matchEvents(self.phases,ev)):
-                m = self.phases[match][:,:2]
+            for match, negation in zip(*self._matchEvents(self.epochs,ev)):
+                m = self.epochs[match][:,:2]
                 subtraction.append(m) if negation else union.append(m)
             for match, negation in zip(*self._matchEvents(self.states,ev)):
                 m = self.states[match][:,:2]
