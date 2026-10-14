@@ -474,14 +474,18 @@ def makeAnatFile(session:str|PathLike[str]):
     return
 
 
-def saveEvent(session:str|PathLike[str], data, extension, columns):
-    """save an event in standard FMAT format, prepending metadata header
+def saveEvent(session:str|PathLike[str], format:str, data, columns):
+    """save an event in standard FMAT format
 
     Args:
-        session:     path to session's .xml file, along which the event file will be created
-        data:        array to save, columns represent different quantities; if 1d, interpreted as one column
-        extension:   extension of event file
-        columns:     names of columns of `data`
+        session:    path to session's .xml file, along which the event file will be created
+        format:     format of event file, either:
+                    - 'npy': to implement
+                    - 'npz': to implement
+                    - a different str, to save the event as a text file named <basename>.<format>, prepending a metadata header
+                      in this case, `data` must be an array whose columns represent different quantities; if 1d, interpreted as one column
+        data:       array to save
+        columns:    names of columns of `data`
     """
 
     if extension == 'npy' or extension == 'npz':
