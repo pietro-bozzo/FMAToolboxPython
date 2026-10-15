@@ -555,7 +555,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         for col in color:
             r, g, b, a = mplc.to_rgba(col)
             facecolor.append((r,g,b,a*0.5))
-        kwargs.setdefault('widths', 0.8)
+        kwargs.setdefault('widths', 1)
         vp = ax.violinplot(data_clean, positions=x, side='high', facecolor=facecolor, linecolor=color,
                            showmedians=True, showextrema=False, **kwargs)
         out.append(vp)
