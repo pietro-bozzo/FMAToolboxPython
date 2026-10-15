@@ -574,7 +574,7 @@ class regions:
     
 
     def avalanches(self, regs=None, when=None, thresh:float=None, bin_mode:Literal['fixed','isi']=None, window:float=None, step:int=None,
-                   shift:bool=None, smooth:bool=None, norm:bool=None, return_fr:bool=None):
+                   shift:bool=None, smooth:float=None, norm:bool=None, return_fr:bool=None):
         """compute avalanches per region from population firing rate
 
         arguments:
