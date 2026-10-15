@@ -404,10 +404,12 @@ def saveEvent(session:str|PathLike[str], format:str, data, columns=None, name=No
 
     Args:
         session:    path to session's .xml file, along which the event file will be created
-        format:     format of event file, either:
+        format:     format of event file, parsed as <subdirs>/<name>.<format>, where <subdirs> and <name> are optional, e.g.,
+                    - 'sleep.npy' gives name='sleep', format='npy'
+                    - 'units/firing.wake' gives subdirs='units', name='firing', format='wake'
+                    accepted formats are:
                     - 'npy': DESCRIBE
                     - 'npz': DESCRIBE
-                    - 'name.np#': shorthand for format='np#', name='name'
                     - a different str, to save the event as a text file named <basename>.<format>, prepending a metadata header
                       in this case, `data` must be an array whose columns represent different quantities; if 1d, interpreted as one column
         data:       array to save; for npz format, must be a dict of {'name': array}
@@ -422,23 +424,29 @@ def saveEvent(session:str|PathLike[str], format:str, data, columns=None, name=No
         saveEvent(session, 'npz', {'onset':[1,2], 'offset':[1.5,3]}, name='sleep')
         # or
         saveEvent(session, 'sleep.npz', {'onset':[1,2], 'offset':[1.5,3]})
+
+        # save the same file in subdirectory 'new' within the session
+        saveEvent(session, 'new/sleep.npz', {'onset':[1,2], 'offset':[1.5,3]})
     """
 
     # parse format
-    parts = format.rsplit('.', 1)
-    format = parts[-1]
-    if len(parts) > 1: name = parts[0]
+    subdirs, _, filename = format.rpartition('/')
+    name, dot, format = filename.rpartition('.')
+    if not dot:
+        name, format = '', filename
+    session = pathlib.Path(session)
+    froot = session.parent / subdirs / session.stem
 
     if format == 'npy' or format == 'npz':
-        if name is None:
+        if not name:
             raise ValueError(f"'name' must be specified for {format} format")
-        fname = pathlib.Path(session).with_suffix(f'.{name}.{format}')
+        fname = froot.with_suffix(f'.{name}.{format}')
         np.save(fname, data) if format == 'npy' else np.savez(fname, **data)
 
     else:
         if columns is None:
             raise ValueError("'columns' must be specified for text formats")
-        fname = pathlib.Path(session).with_suffix(f'.{format}')
+        fname = froot.with_suffix(f'.{format}')
         np.savetxt(fname, data, delimiter=',', header=f" columns: {', '.join(columns)}", comments="%")
 
     return
