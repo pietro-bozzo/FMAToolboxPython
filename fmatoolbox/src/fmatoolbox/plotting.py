@@ -33,10 +33,10 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
     lw = 0.6 if format == 'paper' else 2
     ax_title_fs = 7 if format == 'paper' else 18
     ax_label_fs = 7 if format == 'paper' else 18
-    ax_label_pad = 0.1 if format == 'paper' else 1
-    ax_tick_fs = 6 if format == 'paper' else 14
+    ax_label_pad = 1 if format == 'paper' else 1
+    ax_tick_fs = 5 if format == 'paper' else 14
     ax_tick_l = 2 if format == 'paper' else 5
-    ax_tick_pad = 1 if format == 'paper' else 2
+    ax_tick_pad = 2 if format == 'paper' else 2
 
     for ax in axs:
         
@@ -656,7 +656,7 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Se
 def pHorzLine(p, t=None, dy=None, color:ColorType=None, ax:Axes=None, **kwargs):
     """draw a horizontal line indicating time points where time series passed a statistical test
 
-    arguments:
+    Args:
         p           (t,c) bool, decision of a statistical test, t: number of time points, c: number of conditions
         t           (t,) float = range(n), time points
         dy          float, scale vertical distances between bars
