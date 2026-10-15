@@ -1,6 +1,7 @@
 """ General-purpose data processing for FMAToolbox """
 
 import numpy as np
+import fmatoolbox.intervals
 
 
 def unwhere(indices,shape=None):
@@ -50,7 +51,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, fast:bool=N
     if n is None: n = 1
     if group is not None: group = np.asarray(group,dtype=int)
     if intervals is not None:
-        events, valid = restrict(events,intervals,shift=True,s_ind=True)
+        events, valid = fmatoolbox.intervals.restrict(events,intervals,shift=True,s_ind=True)
         offset = 0
         if group is not None:
             group = group[valid]
@@ -107,7 +108,7 @@ def shuffleEvents(events, offset:float=None, n:int=None, group=None, fast:bool=N
     # unshift events back into intervals
     if intervals is not None:
         for i in range(n):
-            shuffled[:,:,i] = unshift(shuffled[:,:,i],intervals)
+            shuffled[:,:,i] = fmatoolbox.intervals.unshift(shuffled[:,:,i],intervals)
 
     # restore shape
     if n_dim == 1 and n == 1:
