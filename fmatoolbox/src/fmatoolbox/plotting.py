@@ -266,7 +266,8 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         smooth          float | (float,float) = None, standard deviation of gaussian kernel passed to ``scipy.ndimage.gaussian_filter`` (after zoom)
         alpha           float | (n,m) float = None, transparency mask for `data` (e.g., to show significance of pixels), values must be in [0,1]
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
-        aspect          str | float | None, same behavior as aspect parameter of imshow
+        aspect          str | float | None, same behavior as aspect parameter of imshow, 'auto' to keep axis aspect ration,
+                        'preserve' to keep it even when a colorbar is drawn
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects
         barticks        (:,) float, if given, draw colorbar next to `ax` with ticks specified by `barticks`, and return both `im` and `cb` objects
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
@@ -276,7 +277,10 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         cb              colorbar, optional
     """
 
-    data = np.array(data,ndmin=2)
+    data = np.array(data, ndmin=2)
+    if ax is None:
+        ax = plt.gca()
+    bb = ax.get_position()
 
     # 1. z-score
     if zscore is not None:
@@ -323,9 +327,9 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         dy = 0.5
     else:
         dy = 0.5 if n_y == 1 else (y[-1] - y[0]) / (data.shape[0] - 1) / 2
-    if ax is None:
-        ax = plt.gca()
 
+    restore = aspect == 'preserve'
+    if restore: aspect = 'auto'
     im = ax.imshow(data, aspect=aspect, vmin=vmin, vmax=vmax, origin='lower', extent=[x[0]-dx, x[-1]+dx, y[0]-dy, y[-1]+dy], **kwargs)
     if alpha is not None:
         im.set_alpha(alpha)
@@ -333,6 +337,8 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         cb = plt.colorbar(im, label=bar, ticks=barticks, ax=ax)
         cb.set_label(bar)
         adjustAxes(cb.ax)
+    if restore:
+        ax.set_position(bb) # restore position (modified by plt.colorbar)
 
     # plot peaks
     if isinstance(sortby,str) and sortby == 'peak-show':
