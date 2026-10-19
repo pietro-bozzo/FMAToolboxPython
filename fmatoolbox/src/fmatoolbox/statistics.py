@@ -335,22 +335,28 @@ def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None
     return means
 
 
-def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which=None, **kwargs):
-    """hierarchical bootstrap test for the difference of mean between conditions
-    construct a group-aware bootstrap distribution for the sample means and tests the null hypothesis that the mean of the difference between conditions is zero
-    note: this function is a wrapper around utilities of ``hierarch.stats``, see Kulkarni et al. 2022 https://doi.org/10.1371/journal.pcbi.1010061
+def hierarchicalBootstrapTest(data, groups=None, names=None, compare:str=None, paired:bool=None, which=None, **kwargs):
+    """hierarchical test for a difference in means between conditions
+    the test permutes condition labels at the outermost level of the hierarchy and bootstraps the levels below it, the null
+    hypothesis is that the conditions have equal means (paired: that the mean within-group difference is zero)
+    note: this function is a wrapper around ``hierarch.stats`` (Kulkarni et al. 2022 https://doi.org/10.1371/journal.pcbi.1010061)
 
     Args:
-        data:      tuple containing datasets for different conditions, each of shape (n_samples_i, n_levels1 + 1)
-        groups:    optional tuple containing hierarchical grouping variables for each condition, each of shape (n_samples_i, n_levels2),
-                   columns are ordered from outer to deeper level, e.g. groupx[:,0] = subject, groupx[:,1] = trial,
-                   giving the hierarchy: subject -> trial -> observations
-        names:     optional list of names for each condition, defaults to `range(len(data))`, ignored if data has less than 3 elements
+        data:      tuple with one array per condition, each of shape (n_samples_i, k + 1), the last column holds the values,
+                   any earlier columns are additional grouping levels; a 1d array is treated as values only
+        groups:    optional tuple with one grouping array per condition, shape (n_samples_i, m), columns ordered from outermost
+                   to innermost level (e.g. groups[i][:,0] = subject, groups[i][:,1] = trial, giving subject -> trial -> observations);
+                   these columns come before data[i][:,:-1], and all conditions must have the same total number of levels
+        names:     optional condition names, defaults to `range(len(data))`, ignored if data has less than 3 elements
         compare:   test statistic, either "means" (default), "corr", "jackknife_corr", or a Callable
-        which:     pairs of datasets to test, when data has more than two elements; if "all" every pairwise comparison will be tested, if a list of lists,
-                   each element contains the indeces of a pair, defaults to "all"
+        paired:    if False (default), conditions contain different subjects and the design formula is ``values ~ condition / group0 / group1 / ...``,
+                   group ids may repeat across conditions but they are treated as distinct clusters; if True, the same group0 ids
+                   (e.g. subjects) appear in every condition, and the formula is ``values ~ group0 / condition / group1 / ...``,
+                   ids must match across conditions
+        which:     pairs of datasets to test, when data has more than two elements; if "all" every pairwise comparison will
+                   be tested, if a list of lists, each element contains the indeces of a pair, defaults to "all"
         **kwargs:  all extra key-word arguments are passed to the following function, depending on `len(data)`:
-                   -1: IMPLEMENT
+                   -1: ``hierarchicalBootstrap``
                    -2: ``hierarch.stats.hypothesis_test``
                    -3: ``hierarch.stats.multi_sample_test``
                    examples include: alternative, skip, bootstraps, permutations, kind, random_state
@@ -359,8 +365,10 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which
         p_value:   p values for the following tests, depending on `len(data)`:
                    - 1: to implement
                    - 2: float, p value for the null hypothesis between the two conditions
-                   - 3 or more: pandas DataFrame with columns condtion1, condition2, p value, corrected p value
+                   - 3 or more: pandas DataFrame with columns Condtion 1, Condition 2, p-value, Corrected p-value
     """
+
+    # NOTE: paired mode possibly fails to reject when more than value per (group0, condition), so lower levels should be averaged first??
 
     try:
        import hierarch
@@ -398,7 +406,8 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which
         # separate groups and data
         gcols = np.column_stack((g, d[:,:-1])) if d.shape[1] > 1 else g
         f = pd.DataFrame(gcols, columns=[f"group{k}" for k in range(gcols.shape[1])])
-        f.insert(0, "treatment", i) # add treatment column
+        loc = int(bool(paired)) # 0 = not paired, 1 = paired
+        f.insert(loc, "treatment", i) # add treatment column
         f["values"] = d[:,-1].astype(float)
         frames.append(f)
 
@@ -414,15 +423,15 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare=None, which
 
     if len(data) == 1:
         def summarize(boot):
-            return MCpValue(boot, np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0) # p value, CI
-        # GET BOOTSTRAPPED DISTR, THEN use summarize
-        raise NotImplementedError("single-condition bootstrap not implemented yet")
+            return MCpValue(boot, np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0) # p-value, CI
+        boot = hierarchicalBootstrap(data[0], groups[0], **kwargs)
+        p_val = summarize(boot)[0] # return only p-value for now, CI not implemented for other conditions yet
     elif len(data) == 2:
-        out = hierarch.stats.hypothesis_test(matrix, treatment_col=treatment_col, compare=compare, **kwargs)
+        p_val = hierarch.stats.hypothesis_test(matrix, treatment_col=treatment_col, compare=compare, **kwargs)
     else:
-        out = hierarch.stats.multi_sample_test(matrix, treatment_col=treatment_col, compare=compare, hypotheses=which, **kwargs)
+        p_val = hierarch.stats.multi_sample_test(matrix, treatment_col=treatment_col, compare=compare, hypotheses=which, **kwargs)
         if names is not None:
             mapping = {float(i): n for i, n in enumerate(names)}
-            out.iloc[:,[0,1]] = out.iloc[:,[0,1]].replace(mapping)
+            p_val.iloc[:,[0,1]] = p_val.iloc[:,[0,1]].replace(mapping)
 
-    return out
+    return p_val
