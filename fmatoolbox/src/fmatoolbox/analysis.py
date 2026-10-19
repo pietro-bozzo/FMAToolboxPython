@@ -404,7 +404,7 @@ def CCG(samples, bin:float=None, limits:tuple[float,float]=None, fast:bool=None,
     return ccg, t
 
 
-def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
+def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=None):
     '''
     compute avalanches' sizes and [start,stop] intervals from a time series
 
@@ -421,6 +421,7 @@ def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
     '''
 
     x = np.asarray(x)
+    if t0 is None: t0 = 0.
 
     # threshold the signal
     threshold = np.percentile(x, threshold)
@@ -436,12 +437,52 @@ def avalanchesFromProfile(x, threshold:float, time_step:float, t0:float=0):
     if sizes[-1] == 0:
         sizes = sizes[:-1]
 
-    #  start and stop times
+    # start and stop times
     start = np.where(np.concatenate(([x[0] != 0], (x[1:] != 0) & (x[:-1] == 0))))[0]
     stop = np.where(np.concatenate(((x[1:] == 0) & (x[:-1] != 0), [x[-1] != 0])))[0] + 1
     intervals = np.stack((start, stop), 1) * time_step + t0 - time_step / 2
 
     return sizes, intervals, size_t
+
+
+def avalTransitionMatrix(x, threshold, min_length:int=None, time_step:float=None, t0:float=None):
+    """estimate P[i,j] = P(x[t+1,i] = True | x[t,j] = True) per avalanche,
+    using only transitions where both t and t+1 lie inside the block
+
+    Returns a list of (start, end, P), end exclusive.
+    P is (m, m) with NaN where column j is never True at a usable t,
+    and None for single-row blocks (no transitions).
+    """
+
+    if min_length is None: min_length = 2
+    if t0 is None: t0 = 0.
+
+    n_features = x.shape[1]
+    threshold = np.percentile(x, threshold, axis=0) # convert from percentile
+    x = x > threshold[None,:]
+
+    # find avalanches
+    active = x.any(axis=1)
+    d = np.diff(np.concatenate(([0], active.view(np.int8), [0])))
+    intervals = np.stack((np.flatnonzero(d == 1), np.flatnonzero(d == -1)), axis=1) # intervals[i]: [start, end (exclusive)]
+    valid = np.ravel(np.diff(intervals) >= min_length)
+    intervals = intervals[valid]
+
+    ATM = np.full((len(intervals), n_features, n_features), np.nan)
+    for i, (s, e) in enumerate(intervals):
+        this_x = x[s:e].astype(np.float64)
+        prev, nxt = this_x[:-1], this_x[1:]
+        counts = nxt.T @ prev # counts[i,j] = x[t,j] & x[t+1,i]
+        denom = prev.sum(axis=0) # x[t,j] over usable t
+        with np.errstate(invalid="ignore", divide="ignore"):
+            ATM[i] = counts / denom[None,:] # divides column j by denom[j]
+
+    # convert to seconds
+    if time_step is not None:
+        intervals = intervals.astype(float) * time_step
+        intervals += t0 - time_step / 2
+
+    return ATM, intervals
 
 
 def PDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None,
