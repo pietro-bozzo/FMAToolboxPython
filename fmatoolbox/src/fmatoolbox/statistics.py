@@ -276,7 +276,7 @@ def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None
         rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
 
     Returns:
-        means:     bootstrap distribution of the data mean, ignoring nans, shape depends on whether `y` is:
+        means:     list of bootstrap distributions of the data mean, ignoring nans, shape depends on whether `y` is:
                    - None, shape (n_iter, n_features) giving the bootstrap distribution of the mean of X
                    - given, shape (n_iter, n_features, 3), with the last dimension being X, Y, X - Y
     """
@@ -425,7 +425,7 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare:str=None, p
         def summarize(boot):
             return MCpValue(boot, np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0) # p-value, CI
         boot = hierarchicalBootstrap(data[0], groups[0], **kwargs)
-        p_val = summarize(boot)[0] # return only p-value for now, CI not implemented for other conditions yet
+        p_val = summarize(boot[0])[0] # return only p-value for now, CI not implemented for other conditions yet
     elif len(data) == 2:
         p_val = hierarch.stats.hypothesis_test(matrix, treatment_col=treatment_col, compare=compare, **kwargs)
     else:
