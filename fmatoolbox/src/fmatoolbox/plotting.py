@@ -400,8 +400,9 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
         return a
     if saxis is not None:
         y = check_ndim(np.array(y,ndmin=3), 3)
-        y_sd = np.nanstd(y, axis=saxis, ddof=1) # (replication, sample)
-        y = np.nanmean(y, axis=saxis) # (replication, sample)
+        y = np.moveaxis(y, saxis, 0) # (surrogate, replication, sample)
+        y_sem = np.nanstd(y, axis=1, ddof=1) / np.sqrt(np.sum(~np.isnan(y), axis=1)) # (surrogate, sample)
+        y = np.nanmean(y, axis=1) # (surrogate, sample)
         ci = 'surrogate'
     else:
         y = check_ndim(np.array(y,ndmin=2), 2)
@@ -429,7 +430,7 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
         ci = lambda x : (np.nanmean(x,axis=0) - np.nanstd(x,axis=0,ddof=1)/np.sqrt(np.sum(~np.isnan(x),axis=0)),
                          np.nanmean(x,axis=0) + np.nanstd(x,axis=0,ddof=1)/np.sqrt(np.sum(~np.isnan(x),axis=0)))
     elif isinstance(ci, str) and ci == 'surrogate':
-        ci = lambda x : (np.nanmean(x,axis=0) - np.nanmean(y_sd,axis=0), np.nanmean(x,axis=0) + np.nanmean(y_sd,axis=0))
+        ci = lambda x : (np.nanmean(x,axis=0) - np.nanmean(y_sem,axis=0), np.nanmean(x,axis=0) + np.nanmean(y_sem,axis=0))
     elif ci is None:
         if y.shape[0] == 1:
             ci = lambda x : (x.flatten(), x.flatten())
