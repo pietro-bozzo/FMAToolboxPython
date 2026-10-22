@@ -356,30 +356,34 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     return im
 
 
-def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None, color:ColorType=None, mode:Literal['area','error','bar']=None,
+def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None, color:ColorType=None, mode:Literal['area','error','bar']=None,
             alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:Axes=None):
     """plot mean +/- confidence intervals of matrix data
 
-    arguments:
-        x         (n,) float = range(n), x coordinates (optional)
-        y         (:,n) float, data to plot, each column corresponds to a value of x
-        ci        callable | 'nansem', used to compute confidence intervals for every column of `y`, either:
-                  - 'nansem', standard error of the mean (SEM) for each column of `y`, ignoring missing values
-                  - callable, must have signature ``low, high = ci(y)``
-        zscore    int, if 1, z-score w.r.t. average of y, if 2, z-score each row of y independently, default is no normalization
-        polar     int, if given, data is expected to span a full circle, and can be either:
-                  - 1, `x[-1] + x[1] - x[0]` and `y[:,0]` are appended to `x` and `y` to close a circular plot
-                  - higher than 1, `polar-1` copies of `y` are appended, to plot multiple periods
-        smooth    float = None, gaussian kernel std for smoothing over time; if `polar` is given, circular smoothing is applied
-        color     color = None
-        mode      str = 'area' | 'error' | 'bar', plot 'ci' either as a shaded area, line with error bars, or bar plot
-        alpha     float = 0.5, area transparency value (only for 'area' and 'bar' mode)
-        label     str = None, legend label for line
-        lprop     dict = {}, keyword arguments passed to matplotlib.pyplot.plot
-        aprop     dict = {}, keyword arguments passed to matplotlib.pyplot.fill_between (only for 'area' mode)
-        ax        matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+    Args:
+        x:         optional x coordinates, defaults to `range(y.shape[1])`
+        y:         2d data to plot, has shape (replications, samples), each column corresponds to a value of x; if `saxis` is given,
+                   must be 3d and the additional dimension represents surrogate replications
+        saxis:     axis corresponding to surrogate replications, if given, y must be 3d and the other two dimensions must be
+                   replications and samples, in this order
+        ci:        method to compute confidence intervals for every column of `y`, either:
+                   - 'nansem', standard error of the mean (SEM) for each column of `y`, ignoring missing values
+                   - a Callable, must have signature ``low, high = ci(y)``
+                   defaults to ``scipy.stats.bootstrap`` if `replications < 500`, otherwise SEM
+        zscore:    if 1, z-score w.r.t. average of y, if 2, z-score each row of y independently, defaults to no normalization
+        polar:     if given, data is expected to span a full circle, and can be either:
+                   - 1, `x[-1] + x[1] - x[0]` and `y[:,0]` are appended to `x` and `y` to close a circular plot (useful for polar axes)
+                   - higher than 1, `polar-1` copies of `y` are appended, to plot multiple periods (useful for cartesian axes)
+        smooth:    gaussian kernel std to smooth over time, defaults to no smoothing; if `polar` is given, circular smoothing is applied
+        color:     color
+        mode:      style of the confidence intervals, either 'area' for a shaded area (default), 'error' for error bars, or 'bar' for a bar plot
+        alpha:     area transparency value, defaults to 0.5, only for 'area' and 'bar' mode
+        label:     optional legend label for line
+        lprop:     dict of keyword arguments passed to ``matplotlib.pyplot.plot``
+        aprop:     dict of keyword arguments passed to ``matplotlib.pyplot.fill_between`` (only for `mode='area'`)
+        ax:        axis to plot in, defaults to current axis
     """
-    # NOTE: should maybe change y to match plt.plot: each row of 'y' corresponds to a values of 'x'
+    # NOTE: should maybe change y to match plt.plot: each row of 'y' corresponds to a value of 'x'
 
     # 'x' is optional
     if y is None:
@@ -387,12 +391,20 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
         x = None
 
     # validate 'y'
-    y = np.array(y, ndmin=2)
-    if y.ndim > 2:
-        if all(s == 1 for s in y.shape[2:]):
-            y = y[(...,) + (0,) * (y.ndim - 2)]
-        else:
-            raise ValueError("'y' must be 2d")
+    def check_ndim(a, n):
+        if a.ndim > n:
+            if all(s == 1 for s in a.shape[n:]):
+                a = a[(...,) + (0,) * (a.ndim - n)]
+            else:
+                raise ValueError(f"'y' must be {n}d")
+        return a
+    if saxis is not None:
+        y = check_ndim(np.array(y,ndmin=3), 3)
+        y_sd = np.nanstd(y, axis=saxis, ddof=1) # (replication, sample)
+        y = np.nanmean(y, axis=saxis) # (replication, sample)
+        ci = 'surrogate'
+    else:
+        y = check_ndim(np.array(y,ndmin=2), 2)
     if x is None: x = np.arange(y.shape[1])
     if len(x) != y.shape[1]:
         raise ValueError(f"'y' {y.shape} must have one column per element of 'x' {x.shape}")
@@ -407,20 +419,22 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
     if alpha is None: alpha = 0.5
     if lprop is None: lprop = {}
     if aprop is None: aprop = {}
-    lprop.setdefault('color',color)
-    lprop.setdefault('label',label)
+    lprop.setdefault('color', color)
+    lprop.setdefault('label', label)
     if not (set(['edgecolor','edgecolors','ec','facecolor','facecolors','fc','color']) & aprop.keys()): aprop['color'] = color
-    aprop.setdefault('alpha',alpha)
-    aprop.setdefault('lw',0)
+    aprop.setdefault('alpha', alpha)
+    aprop.setdefault('lw', 0)
 
-    if isinstance(ci,str) and ci == 'nansem':
+    if isinstance(ci, str) and ci == 'nansem':
         ci = lambda x : (np.nanmean(x,axis=0) - np.nanstd(x,axis=0,ddof=1)/np.sqrt(np.sum(~np.isnan(x),axis=0)),
                          np.nanmean(x,axis=0) + np.nanstd(x,axis=0,ddof=1)/np.sqrt(np.sum(~np.isnan(x),axis=0)))
+    elif isinstance(ci, str) and ci == 'surrogate':
+        ci = lambda x : (np.nanmean(x,axis=0) - np.nanmean(y_sd,axis=0), np.nanmean(x,axis=0) + np.nanmean(y_sd,axis=0))
     elif ci is None:
         if y.shape[0] == 1:
             ci = lambda x : (x.flatten(), x.flatten())
         elif y.shape[0] < 500:
-            ci = lambda x : sp.stats.bootstrap((x,),np.nanmean,n_resamples=500,vectorized=True,paired=True).confidence_interval
+            ci = lambda x : sp.stats.bootstrap((x,), np.nanmean, n_resamples=500, vectorized=True, paired=True).confidence_interval
         else:
             ci = lambda x : (x.mean(axis=0) - x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]), x.mean(axis=0) + x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]))
     if ax is None:
@@ -428,10 +442,10 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
 
     if zscore == 2:
         # z-score rows of y
-        y = sp.stats.zscore(y,axis=1,nan_policy='omit')
+        y = sp.stats.zscore(y, axis=1, nan_policy='omit')
 
     # statistic value for each column
-    y_line = np.nanmean(y,axis=0)
+    y_line = np.nanmean(y, axis=0)
     # statistic confidence interval for each column
     y_low, y_high = ci(y)
 
@@ -439,7 +453,7 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
         # z-score results w.r.t. average y
         # mean and standard deviation of average y
         m = np.nanmean(y_line)
-        s = np.nanstd(y_line,ddof=1)
+        s = np.nanstd(y_line, ddof=1)
         # z-score s.e.m.
         dy_low = (y_line - y_low) / s
         dy_high = (y_high - y_line) / s
