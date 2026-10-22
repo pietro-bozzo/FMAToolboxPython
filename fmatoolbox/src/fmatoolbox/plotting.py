@@ -248,7 +248,8 @@ def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axe
 
 
 def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:ArrayLike|Callable|str=None, sortax:int=None,
-                 xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:str|float=None, bar:str=None, barticks=None, ax:Axes=None, **kwargs):
+                 xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:str|float=None, bar:str|dict=None,
+                 ax:Axes=None, **kwargs):
     """plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
@@ -268,8 +269,8 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
         aspect          str | float | None, same behavior as aspect parameter of imshow, 'auto' to keep axis aspect ration,
                         'preserve' to keep it even when a colorbar is drawn
-        bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects
-        barticks        (:,) float, if given, draw colorbar next to `ax` with ticks specified by `barticks`, and return both `im` and `cb` objects
+        bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects;
+                        can also be a dict of plt.colorbar kwargs
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
 
     output:
@@ -333,9 +334,10 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     im = ax.imshow(data, aspect=aspect, vmin=vmin, vmax=vmax, origin='lower', extent=[x[0]-dx, x[-1]+dx, y[0]-dy, y[-1]+dy], **kwargs)
     if alpha is not None:
         im.set_alpha(alpha)
-    if bar is not None or barticks is not None:
-        cb = plt.colorbar(im, label=bar, ticks=barticks, ax=ax)
-        cb.set_label(bar)
+    if bar is not None:
+        if isinstance(bar, str): bar = {'label':bar}
+        cb = plt.colorbar(im, ax=ax, **bar)
+        #cb.set_label(bar)
         adjustAxes(cb.ax)
     if restore:
         ax.set_position(bb) # restore position (modified by plt.colorbar)
@@ -349,7 +351,7 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
             peaks = peaks if y is None else y[peaks]
             ax.plot(x,np.sort(peaks),color='r')
 
-    if bar is not None or barticks is not None:
+    if bar is not None:
         return im, cb
     return im
 
@@ -385,7 +387,7 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
         x = None
 
     # validate 'y'
-    y = np.array(y,ndmin=2)
+    y = np.array(y, ndmin=2)
     if y.ndim > 2:
         if all(s == 1 for s in y.shape[2:]):
             y = y[(...,) + (0,) * (y.ndim - 2)]
@@ -393,7 +395,7 @@ def semPlot(x, y=None, ci:str|Callable=None, zscore:int=None, polar:int=None, sm
             raise ValueError("'y' must be 2d")
     if x is None: x = np.arange(y.shape[1])
     if len(x) != y.shape[1]:
-        raise ValueError("'y' must have one column per element of 'x'")
+        raise ValueError(f"'y' {y.shape} must have one column per element of 'x' {x.shape}")
 
     # default values
     y = y[~np.isnan(y).all(axis=1)] # ŕemove full-nan rows
@@ -577,7 +579,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         out.append( [ax.plot(np.stack([x_drawn[i],x_drawn[i+1]]), np.stack([data[i],data[i+1]]), color='gray', alpha=0.5) for i in range(n_data-1)] )
 
     if label is not None:
-        ax.set_xticks(x,label)
+        ax.set_xticks(x, labels=label, fontsize=ax.xaxis.label.get_fontsize())
     ax.spines["bottom"].set_visible(False)
     ax.tick_params(axis="x", which="both", length=0)
 
@@ -709,10 +711,8 @@ def plotIntervals(intervals, color:ColorType='gray', alpha=0.3, label:str=None, 
 
     draw = lambda a, b, _label : ax.axvspan(a, b, facecolor=color, edgecolor='none', alpha=alpha, label=_label, **plot_kwargs)
     draw(intervals[0,0], intervals[0,1], label)
-    #ax.axvspan(intervals[0,0],intervals[0,1],facecolor=color,edgecolor='none',alpha=alpha,label=label,**plot_kwargs)
     for start, stop in intervals[1:]:
         draw(start, stop, None)
-        #ax.axvspan(start,stop,facecolor=color,edgecolor='none',alpha=alpha,**plot_kwargs)
 
 
 def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None,
@@ -799,13 +799,13 @@ def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, height:fl
 
     if ids is not None:
         # keep requested neurons
-        valid = np.isin(units,ids)
+        valid = np.isin(units, ids)
         times = times[valid]
         units = units[valid]
 
     if compact:
         # relabel units from 1 to N
-        _, units = np.unique(units,return_inverse=True)
+        _, units = np.unique(units, return_inverse=True)
     if offset:
         units += offset
 
