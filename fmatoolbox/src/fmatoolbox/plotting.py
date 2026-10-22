@@ -482,13 +482,13 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
             y_low = np.concatenate((y_low, y_low[:n_x]))
             y_high = np.concatenate((y_high, y_high[:n_x]))
 
-    copy_color = aprop['color'] is None
+    copy_color = 'color' in aprop and aprop['color'] is None
     match mode:
         case 'area':
             l = ax.plot(x,y_line,**lprop)
             if copy_color:
                 aprop['color'] = l[0].get_color()
-            ax.fill_between(x,y_low,y_high,**aprop)
+            ax.fill_between(x, y_low, y_high, **aprop)
         case 'error':
             ax.errorbar(x,y_line,yerr=[y_low,y_high],marker='o',**lprop)
         case 'bar':
@@ -499,7 +499,7 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
 
 
 def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['box','violin','scatter','link']|Collection[str]=None, color:ColorType|Collection[ColorType]=None,
-            label:str|Sequence[str]=None, ax:Axes=None, **kwargs):
+            label:str|Sequence[str]=None, lw:float=None, ax:Axes=None, **kwargs):
     """draw box plots to represent groups of datasets
     note: calls matplotlib's boxplot, which sets xticks
 
@@ -512,6 +512,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
                  - 'scatter', scatter plots of data points of each dataset
                  - 'link, lines between data points of each adjacent dataset
         color:   color for boxes, violins, and scatter plots, one per dataset or a single one for all, defaults to blue
+        lw:      contour line width, only for violin plots
         label:   xtick label below each plotted distribution, defaults to no labels
         ax:      axes to plot in, defaults to ``matplotlib.pyplot.gca()``
         kwargs:  all extra key-word arguments are passed to the corresponding matplotlib function
@@ -576,11 +577,19 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
     if 'violin' in mode:
         facecolor = []
         for col in color:
-            r, g, b, a = mplc.to_rgba(col)
-            facecolor.append((r,g,b,a*0.5))
+            if 'facecolor' in kwargs:
+                facecolor.append(kwargs['facecolor'])
+            else:
+                r, g, b, a = mplc.to_rgba(col)
+                facecolor.append((r,g,b,a*0.5))
+        if 'facecolor' in kwargs: kwargs.pop('facecolor')
         kwargs.setdefault('widths', 1)
-        vp = ax.violinplot(data_clean, positions=x, side='high', facecolor=facecolor, linecolor=color,
+        kwargs.setdefault('side', 'high')
+        vp = ax.violinplot(data_clean, positions=x, facecolor=facecolor, linecolor=color,
                            showmedians=True, showextrema=False, **kwargs)
+        for i, body in enumerate(vp['bodies']):
+            body.set_edgecolor(color[i])
+            if lw is not None: body.set_linewidth(lw)
         out.append(vp)
 
     # following plots use original data and are unaffected by nans
