@@ -575,6 +575,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         out.append(bp)
 
     if 'violin' in mode:
+        if lw is None: lw = ax.spines['left'].get_linewidth()
         facecolor = []
         for col in color:
             if 'facecolor' in kwargs:
@@ -589,7 +590,9 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
                            showmedians=True, showextrema=False, **kwargs)
         for i, body in enumerate(vp['bodies']):
             body.set_edgecolor(color[i])
-            if lw is not None: body.set_linewidth(lw)
+            body.set_linewidth(lw * 0.7)
+        vp['cmedians'].set_color('k')
+        vp['cmedians'].set_linewidth(lw * 1.2)
         out.append(vp)
 
     # following plots use original data and are unaffected by nans
