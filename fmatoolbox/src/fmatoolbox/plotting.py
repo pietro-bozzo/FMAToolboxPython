@@ -18,25 +18,35 @@ from os import PathLike
 mpl.rcParams["font.family"] = "Liberation Sans"
 
 
-def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'):
-    # adjust axes properties to improve figure appearance
-    #
-    # arguments:
-    #     axs        iterable of matplotlib.axes.Axes
-    #     format     {'paper','poster'}, controls font sizes and lines' width
+def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']=None, lw:float=None, title_fs:float=None,
+               label_fs:float=None, label_pad:float=None, tick_fs:float=None, tick_len:float=None, tick_pad:float=None):
+    """adjust axes properties to improve figure appearance
 
-    if isinstance(axs,mpla._axes.Axes):
+    Args:
+        axs:        axis(es) to adjust
+        format:     controls font sizes and lines' width
+        lw:         axis spine widths, defaults to 0.6 for 'paper' mode (2 for 'poster' mode)
+        title_fs:   title font size, defaults to 7 (18)
+        label_fs:   label font size, defaults to 7 (18)
+        label_pad:  label padding, defaults to 1 for both 'paper' and 'poster' modes
+        tick_fs:    tick font size, defaults to 5 (14)
+        tick_len:   tick length, defaults to 2 (5)
+        tick_pad:   tick padding, defaults to 2 for both 'paper' and 'poster' modes
+    """
+
+    # defaults
+    if format is None: format = 'paper'
+    if lw is None: lw = 0.6 if format == 'paper' else 2
+    if title_fs is None: title_fs = 7 if format == 'paper' else 18
+    if label_fs is None: label_fs = 7 if format == 'paper' else 18
+    if label_pad is None: label_pad = 1 if format == 'paper' else 1
+    if tick_fs is None: tick_fs = 5 if format == 'paper' else 14
+    if tick_len is None: tick_len = 2 if format == 'paper' else 5
+    if tick_pad is None: tick_pad = 2 if format == 'paper' else 2
+    if isinstance(axs, mpla._axes.Axes):
         axs = [axs]
-    elif isinstance(axs,np.ndarray):
+    elif isinstance(axs, np.ndarray):
         axs = axs.ravel()
-
-    lw = 0.6 if format == 'paper' else 2
-    ax_title_fs = 7 if format == 'paper' else 18
-    ax_label_fs = 7 if format == 'paper' else 18
-    ax_label_pad = 1 if format == 'paper' else 1
-    ax_tick_fs = 5 if format == 'paper' else 14
-    ax_tick_l = 2 if format == 'paper' else 5
-    ax_tick_pad = 2 if format == 'paper' else 2
 
     for ax in axs:
         
@@ -45,12 +55,10 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']='paper'
 
         # adjust thickness and font size
         [ax.spines[spine].set_linewidth(lw) for spine in ['bottom','left','polar'] if spine in ax.spines]
-        ax.tick_params(width=lw, labelsize=ax_tick_fs, pad=ax_tick_pad, length=ax_tick_l)
-        ax.title.set_fontsize(ax_title_fs) # NOTE: seems not to work
-        ax.xaxis.label.set_fontsize(ax_label_fs)
-        ax.yaxis.label.set_fontsize(ax_label_fs)
-        ax.xaxis.labelpad = ax_label_pad
-        ax.yaxis.labelpad = ax_label_pad
+        ax.tick_params(width=lw, labelsize=tick_fs, pad=tick_pad, length=tick_len)
+        ax.title.set_fontsize(title_fs) # NOTE: seems not to work
+        ax.xaxis.label.set_fontsize(label_fs); ax.yaxis.label.set_fontsize(label_fs)
+        ax.xaxis.labelpad = label_pad; ax.yaxis.labelpad = label_pad
 
     return
 
@@ -337,8 +345,10 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     if bar is not None:
         if isinstance(bar, str): bar = {'label':bar}
         cb = plt.colorbar(im, ax=ax, **bar)
-        #cb.set_label(bar)
-        adjustAxes(cb.ax)
+        lw = ax.spines['left'].get_linewidth() / 2
+        adjustAxes(cb.ax, lw=lw, label_fs=ax.xaxis.label.get_fontsize()*0.8, tick_pad=1,
+                   tick_len=ax.xaxis.get_major_ticks()[0].tick1line.get_markersize()*0.8)
+        cb.outline.set_linewidth(lw)
     if restore:
         ax.set_position(bb) # restore position (modified by plt.colorbar)
 
