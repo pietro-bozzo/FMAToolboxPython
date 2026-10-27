@@ -229,10 +229,10 @@ def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:Axes=None,
     return ax.plot(*args, **kwargs)
 
 
-def plotXY(data, start=None, stop=None, color:ColorType=None, label=None, ax:Axes=None, **kwargs):
+def plotXY(data, start:float=None, stop:float=None, color:ColorType=None, label=None, ax:Axes=None, **kwargs):
     # plot columns of 'data', interpreting the first as the x axis and all others as y values
 
-    data = np.array(data,ndmin=2)
+    data = np.array(data, ndmin=2)
     x = data[:,0]
     if ax is None:
         ax = plt.gca()
@@ -706,7 +706,7 @@ def pHorzLine(p, t=None, dy=None, color:ColorType=None, ax:Axes=None, **kwargs):
         t           (t,) float = range(n), time points
         dy          float, scale vertical distances between bars
         color       color, line color
-        ax          matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+        ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
         **kwargs    all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
     """
 
@@ -769,7 +769,7 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
         color        color = None, line color
         alpha        float, transparency, default is 0.7 for method 'discrete', 1.0 otherwise
         label        str = None, legend label for line
-        ax           matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+        ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
 
     output:
         grid         (n,) list of (n_points,) float, values of X_i for which the PDF was evalueated
@@ -820,12 +820,26 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
     return grid, density
 
 
-def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, height:float=None, ax:Axes=None, **plot_kwargs):
+def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None, compact:bool=None, offset:float=None, height:float=None, ax:Axes=None, **plot_kwargs):
+    """draw a raster plot of a point process, e.g., spike times of different neurons
+
+    Args:
+        spikes:      array of shape (n,2) whose columns are times and process ids; if 1d, contains times of a single process
+        start/stop:  if given, only plot rows of `spikes` whose time is greater/smaller than `start/stop`
+        ids:         if given, only plot rows of `spikes` whose id is in `ids`
+        compact:     if True, remove empty rows in the raster plot when an id is missing in `spikes` or `ids`, defaults to False
+        offset:      y axis offset for the first row of the raster, defaults to 0
+        height:      height of each row of the raster, defaults to 1
+        ax:          axes to plot in, defaults to ``matplotlib.pyplot.gca()``
+        **kwargs     all extra key-word arguments are passed to ``matplotlib.pyplot.vlines``
+    """
 
     # ADD: arg bin, which changes plot mode to color map of binned fr
 
+    # defaults
     if height is None: height = 1
-
+    if ax is None:
+        ax = plt.gca()
     spikes = np.asarray(spikes)
     if spikes.ndim == 1:
         times = spikes
@@ -834,22 +848,26 @@ def plotRaster(spikes, ids=None, compact:bool=None, offset:float=None, height:fl
         times = spikes[:,0]
         units = spikes[:,1]
 
+    # restrict in time
+    valid = np.full_like(times, True)
+    if start is not None:
+        valid[x < start] = False
+    if stop is not None:
+        valid[x > stop] = False
+    times = times[valid]
+    units = units[valid]
+
+    # keep requested neurons
     if ids is not None:
-        # keep requested neurons
         valid = np.isin(units, ids)
         times = times[valid]
         units = units[valid]
-
+    # relabel units from 0 to N - 1
     if compact:
-        # relabel units from 1 to N
         _, units = np.unique(units, return_inverse=True)
     if offset:
         units += offset
 
-    if ax is None:
-        ax = plt.gca()
-
-    half_height = height / 2
-    ax.vlines(times, units-half_height, units+half_height, **plot_kwargs)
+    ax.vlines(times, units-height/2, units+height/2, **plot_kwargs)
 
     return
