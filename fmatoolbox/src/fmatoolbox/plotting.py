@@ -752,8 +752,8 @@ def plotIntervals(intervals, color:ColorType='gray', alpha=0.3, label:str=None, 
         draw(start, stop, None)
 
 
-def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None, bins=None,
-            norm:Literal['density','max','cdf']=None, color:ColorType=None, alpha:float=None, label=None, ax:Axes=None, **plot_kwargs):
+def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None,
+            bins=None, norm:Literal['density','max','cdf']=None, color:ColorType=None, alpha:float=None, label=None, ax:Axes=None, **kwargs):
     """estimate and plot probability density function (PDF) of data
 
     arguments:
@@ -770,6 +770,7 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
         alpha        float, transparency, default is 0.7 for method 'discrete', 1.0 otherwise
         label        str = None, legend label for line
         ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
+        **kwargs     all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
 
     output:
         grid         (n,) list of (n_points,) float, values of X_i for which the PDF was evalueated
@@ -804,23 +805,23 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
             # 1. real-valued data using gaussian kernel density estimator
             case 'normal':
                 if method == 'kde':
-                    ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
+                    ax.plot(g,d,color=color[i],label=label[i],**kwargs)
                 else:
                     if alpha[i] is None: alpha[i] = 0.7
-                    ax.bar(g,d,width=g[1]-g[0],color=color[i],label=label[i],alpha=alpha[i],**plot_kwargs)
+                    ax.bar(g,d,width=g[1]-g[0],color=color[i],label=label[i],alpha=alpha[i],**kwargs)
             # 2. log-transformed data using gaussian kernel density estimator
             case 'log':
                 jacobian = np.exp(g) # jacobian term to transform density back to linear
-                ax.loglog(jacobian,d,color=color[i],label=label[i],**plot_kwargs)
+                ax.loglog(jacobian,d,color=color[i],label=label[i],**kwargs)
             # 3. circular data using von-Mises kernel density estimator
             case 'polar':
-                ax.plot(g,d,color=color[i],label=label[i],**plot_kwargs)
+                ax.plot(g,d,color=color[i],label=label[i],**kwargs)
     ax.set_yticks([])
 
     return grid, density
 
 
-def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None, compact:bool=None, offset:float=None, height:float=None, ax:Axes=None, **plot_kwargs):
+def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None, compact:bool=None, offset:float=None, height:float=None, ax:Axes=None, **kwargs):
     """draw a raster plot of a point process, e.g., spike times of different neurons
 
     Args:
@@ -849,11 +850,11 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
         units = spikes[:,1]
 
     # restrict in time
-    valid = np.full_like(times, True)
+    valid = np.full_like(times, True, dtype=bool)
     if start is not None:
-        valid[x < start] = False
+        valid[times < start] = False
     if stop is not None:
-        valid[x > stop] = False
+        valid[times > stop] = False
     times = times[valid]
     units = units[valid]
 
@@ -868,6 +869,6 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
     if offset:
         units += offset
 
-    ax.vlines(times, units-height/2, units+height/2, **plot_kwargs)
+    ax.vlines(times, units-height/2, units+height/2, **kwargs)
 
     return
