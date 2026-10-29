@@ -1,4 +1,5 @@
 from . import analysis
+from . import avalanches
 from . import data
 from . import exceptions
 from . import general
