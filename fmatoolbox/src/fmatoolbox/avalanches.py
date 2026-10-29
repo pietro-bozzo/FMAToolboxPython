@@ -82,7 +82,24 @@ def avalTransitionMatrix(x, threshold, min_length:int=None, time_step:float=None
 
 
 def powerlaw_fit(data, xmin=None, xmax=None, drop_unique=False, verbose=False):
-    """fit a discrete power law via Clauset et al. 2009 (MLE)"""
+    """fit a discrete power law via Clauset et al. 2009 (MLE)
+    DESCRIBE METHOD
+
+    Args:
+        data:         DESCRIBE
+        xmin / xmax:  DESCRIBE
+        drop_unique:  DESCRIBE
+        verbose:      DESCRIBE
+
+    Returns:
+        dict with keys:
+        - 'tau', estimated power law exponent
+        - 'sigma', DESCRIBE
+        - 'xmin', 'xmax', values used
+        - 'tail_prop', proportion of values in the fit range
+        - 'ks', Kolgomogorov-Smirnov statistic between empirical and estimated power law
+        - 'pdf', empirical power law distribution of `data`
+    """
 
     data = np.round(data).astype(int)
     data = data[data >= 1]
@@ -145,7 +162,23 @@ def powerlaw_fit(data, xmin=None, xmax=None, drop_unique=False, verbose=False):
 
 
 def critical_exponents(sizes, intervals, bin_size:float, xmin:float=None, xmax:float=None, verbose:bool=None):
-    "estimate critical exponents and distance from criticality"
+    """estimate critical exponents and distance from criticality
+
+    Args:
+        sizes:         avalanche sizes (1d)
+        intervals:     avalanches intervals (2-columns array)
+        bin_size:      time bin used to compute avalanches, used to convert `intervals` to integers
+        xmin / xmax:   DESCRIBE
+        verbose:       DESCRIBE
+
+    Returns:
+        exponents, dict with keys:
+        - 'tau_s', 'tau_d', estimated power law exponent for sizes and durations
+        - 'gamma_th', gamma estimated from scaling relation
+        - 'gamma_emp', gamma estimated from area fitting
+        - 'dcc', distance from criticality coefficient
+        fit: dict with keys 'S' and 'D', output of ``powerlaw_fit`` for `sizes` and `intervals` (durations)
+    """
 
     exponents = {}; fit = {}
 
