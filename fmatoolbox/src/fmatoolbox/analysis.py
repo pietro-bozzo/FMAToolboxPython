@@ -28,6 +28,8 @@ def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None,
     samples = np.asarray(samples)
     if bin is None: bin = 0.05
     if step is None: step = 1
+    if not bin > 0:
+        raise ValueError("'bin' must be positive")
     if step % 1 or step == 0:
         raise ValueError("'step' must be a non-zero integer")
 

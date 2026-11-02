@@ -610,6 +610,8 @@ class regions:
             bin = []
             for i, r in enumerate(regs):
                 isi = window * np.diff(self.spikes(regs=r,when=when,shift=True)[:,0]).mean().item()
+                if not isi > 0:
+                    raise ValueError(f'Average inter-spike interval could not be computed for region {r}, check that it has at least one spike in the given intervals')
                 bin.append(isi)
                 fr = self.firingRate(regs=r,when=when,shift=shift,window=isi,step=step,smooth=smooth,norm=norm)
                 size[r], intervals[r], size_t[r] = fmatoolbox.avalanches.avalanchesFromProfile(fr[:,1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
