@@ -629,7 +629,7 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Se
 
     Args:
         p:      (n,3) float array, each row is [i,j,pij], where pij is the p value for a test comparing i-th and j-th populations
-        x:      (n,) float array, x coordinates for populations, defaults to range(n)
+        x:      (n,) float array, x coordinates for populations, defaults to `range( 1 + max condition index in p[:,:-1])`
         alpha:  false-discovery tolerance level, defaults to 0.05
         dy:     scale vertical distances between bars, defaults to 1
         draw:   draw flags for [n.s., *, **, ***], defaults to (False,True,True,True)
@@ -642,7 +642,7 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Se
     if p.shape[1] != 3:
         raise ValueError("'p' must have 3 columns")
     indices = p[:,0:2].astype(int)
-    x = np.arange(p.shape[0]) if x is None else np.array(x,ndmin=1)
+    x = np.arange(p[:,:-1].max()+1) if x is None else np.array(x,ndmin=1)
     if alpha is None: alpha = 0.05
     if dy is None: dy = 1.
     if angle is None: angle = True
