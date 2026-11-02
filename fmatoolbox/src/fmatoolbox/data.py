@@ -660,7 +660,7 @@ def _batchWorker(payload):
 
 
 def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=None, rnd_seed:str=None, kwargs:dict|list[dict]=None, ignore_args:bool=False,
-             sessions:list[int]=None, parallel:bool|int=None, verbose:bool=None) -> tuple[list, ...]:
+             sessions:list[int]=None, parallel:bool|int=None, drop_fail:bool=None, verbose:bool=None) -> tuple[list, ...]:
     """run a routine on multiple sessions
 
     Args:
@@ -674,7 +674,9 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
         sessions:       indices of session to process, defaults to all sessions from batch file
         parallel:       if True, parallelize calls of `func` with ``loky.get_reusable_executor``, if int, it also specifies
                         the number of workers, defaults to no parallelization
+        drop_fail:      if True, drop sessions that fail, defaults to False
         verbose:        if True, log progress, defaults to True
+
     Returns:
         variable outputs matching `func`'s signature
     """
@@ -760,25 +762,27 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
 
     # determine output number (expected to be constant across func calls)
     n_outs = None
-    outputs = [None] * n_sessions
+    valid = []
     for result in results:
-        if result is not None:
-            if isinstance(result,tuple):
+        valid.append(result is not None)
+        if n_outs is None and result is not None:
+            if isinstance(result, tuple):
                 n_outs = len(result)
-                outputs = [outputs.copy() for _ in range(n_outs)]
             else:
-                n_outs = 0  # 0 marks the single output case
-            break
+                n_outs = 0 # 0 marks the single output case
     # assign outputs
     if n_outs is not None:
+        outputs = [[] for _ in range(max(n_outs,1))]
         for i in range(n_sessions):
-            if results[i] is not None:
+            if not valid[i] and n_outs:
+                results[i] = [None] * n_outs
+            if valid[i] or not drop_fail:
                 if n_outs == 0:
-                    outputs[i] = results[i]
+                    outputs[0].append(results[i])
                 else:
                     for j in range(n_outs):
-                        outputs[j][i] = results[i][j]
+                        outputs[j].append(results[i][j])
 
     verbose and print(f'Batch completed with {len(errors)} errors, {datetime.datetime.now()}')
     
-    return tuple(outputs) if n_outs else outputs
+    return tuple(outputs) if n_outs else outputs[0]
