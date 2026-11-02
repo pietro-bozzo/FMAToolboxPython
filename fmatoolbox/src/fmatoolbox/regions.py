@@ -612,14 +612,14 @@ class regions:
                 isi = window * np.diff(self.spikes(regs=r,when=when,shift=True)[:,0]).mean().item()
                 bin.append(isi)
                 fr = self.firingRate(regs=r,when=when,shift=shift,window=isi,step=step,smooth=smooth,norm=norm)
-                size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
+                size[r], intervals[r], size_t[r] = fmatoolbox.avalanches.avalanchesFromProfile(fr[:,1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
             out = (size, intervals, size_t, bin)
 
         # 2. bin: window (s)
         else:
             fr = self.firingRate(regs=regs,when=when,shift=shift,window=window,step=step,smooth=smooth,norm=norm)
             for i, r in enumerate(regs):
-                size[r], intervals[r], size_t[r] = fmatoolbox.analysis.avalanchesFromProfile(fr[:,i+1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
+                size[r], intervals[r], size_t[r] = fmatoolbox.avalanches.avalanchesFromProfile(fr[:,i+1],thresh,time_step=fr[1,0]-fr[0,0],t0=fr[0,0])
             out = (size, intervals, size_t)
 
         if return_fr:
