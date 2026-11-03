@@ -771,7 +771,9 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
             else:
                 n_outs = 0 # 0 marks the single output case
     # assign outputs
-    if n_outs is not None:
+    if n_outs is None:
+        outputs = [[None] * n_sessions]
+    else:
         outputs = [[] for _ in range(max(n_outs,1))]
         for i in range(n_sessions):
             if not valid[i] and n_outs:
