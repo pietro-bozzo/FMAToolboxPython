@@ -623,7 +623,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
     return out
 
 
-def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Sequence[bool]=(False,True,True,True), angle:bool=None, lw:float=None,
+def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Sequence[bool]=None, angle:bool=None, lw:float=None,
          ax:Axes=None) -> None:
     """plot horizontal bars and asterisks indicating significant differences between distributions
 
@@ -632,7 +632,7 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Se
         x:      (n,) float array, x coordinates for populations, defaults to `range( 1 + max condition index in p[:,:-1])`
         alpha:  false-discovery tolerance level, defaults to 0.05
         dy:     scale vertical distances between bars, defaults to 1
-        draw:   draw flags for [n.s., *, **, ***], defaults to (False,True,True,True)
+        draw:   draw flags for [n.s., *, **, ***], defaults to (False, True, True, True)
         angle:  if True (default), horizontal bars have two vertical ticks at their extrema
         lw:     line width, defaults to the spine width of the current axes
         ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
@@ -645,6 +645,7 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Se
     x = np.arange(p[:,:-1].max()+1) if x is None else np.array(x,ndmin=1)
     if alpha is None: alpha = 0.05
     if dy is None: dy = 1.
+    if draw is None: draw = (False,True,True,True)
     if angle is None: angle = True
     if ax is None: ax = plt.gca()
     if lw is None: lw = ax.spines["left"].get_linewidth()
@@ -667,16 +668,16 @@ def pBar(p:ArrayLike, x:ArrayLike=None, alpha:float=None, dy:float=None, draw:Se
         h[p[:,2] < alpha/50] = 3
         h[p[:,2] >= alpha] = 0
 
-    fontsz = ax.xaxis.label.get_fontsize() * .8
+    fontsz = ax.xaxis.label.get_fontsize() * .7
     def _plot_line(ax, x, y, dy, p, last_p, t, single):
         if last_p > p[0]: # increase height not to overlap lines
             y = y + dy*3.5
         if not single:
             if angle:
-                ax.plot([x[0],x[0],x[1],x[1]],[y-dy,y,y,y-dy],color='k',lw=lw)
+                ax.plot([x[0],x[0],x[1],x[1]], [y-dy,y,y,y-dy], color='k', lw=lw)
             else:
-                ax.plot([x[0],x[1]],[y,y],color='k',lw=lw)
-        ax.text(np.mean(x),y+0.8*dy,t,ha='center',va='center',color='k',size=fontsz)
+                ax.plot([x[0],x[1]], [y,y], color='k', lw=lw)
+        ax.text(np.mean(x), y+dy, t, ha='center', va='center', color='k', size=fontsz)
         last_p = p[1]
         return y, last_p
 
