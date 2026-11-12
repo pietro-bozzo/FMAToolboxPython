@@ -19,7 +19,8 @@ mpl.rcParams["font.family"] = "Liberation Sans"
 
 
 def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']=None, lw:float=None, title_fs:float=None,
-               label_fs:float=None, label_pad:float=None, tick_fs:float=None, tick_len:float=None, tick_pad:float=None):
+               label_fs:float=None, label_pad:float=None, tick_fs:float=None, tick_len:float=None,
+               tick_pad:float=None, **kwargs):
     """adjust axes properties to improve figure appearance
 
     Args:
@@ -32,6 +33,7 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']=None, l
         tick_fs:    tick font size, defaults to 5 (14)
         tick_len:   tick length, defaults to 2 (5)
         tick_pad:   tick padding, defaults to 2 for both 'paper' and 'poster' modes
+        kwargs:     all extra key-word arguments are passed to ``matplotlib.axes.set``
     """
 
     # defaults
@@ -59,6 +61,8 @@ def adjustAxes(axs:Axes|Iterable[Axes], format:Literal['paper','poster']=None, l
         ax.title.set_fontsize(title_fs) # NOTE: seems not to work
         ax.xaxis.label.set_fontsize(label_fs); ax.yaxis.label.set_fontsize(label_fs)
         ax.xaxis.labelpad = label_pad; ax.yaxis.labelpad = label_pad
+
+        ax.set(**kwargs)
 
     return
 
@@ -428,8 +432,11 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
     polar = 0 if polar is None else int(polar)
     if mode is None: mode = 'area' if y.shape[1] > 1 else 'error'
     if alpha is None: alpha = 0.5
+    if ax is None:
+        ax = plt.gca()
     if lprop is None: lprop = {}
     if aprop is None: aprop = {}
+    lprop.setdefault('lw', ax.spines.left.get_linewidth() * 1.2)
     lprop.setdefault('color', color)
     lprop.setdefault('label', label)
     if not (set(['edgecolor','edgecolors','ec','facecolor','facecolors','fc','color']) & aprop.keys()): aprop['color'] = color
@@ -448,8 +455,6 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
             ci = lambda x : sp.stats.bootstrap((x,), np.nanmean, n_resamples=500, vectorized=True, paired=True).confidence_interval
         else:
             ci = lambda x : (x.mean(axis=0) - x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]), x.mean(axis=0) + x.std(axis=0,ddof=1)/np.sqrt(x.shape[0]))
-    if ax is None:
-        ax = plt.gca()
 
     if zscore == 2:
         # z-score rows of y
@@ -542,6 +547,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
         if data.ndim == 1:
             data_clean = data[~np.isnan(data)]
             n_data = 1
+            data = data[None,:]
         elif data.ndim == 2:
             data_clean = [data[~np.isnan(data[:,col]),col] for col in range(data.shape[1])]
             data = data.T
