@@ -3,6 +3,7 @@
 import numpy as np
 import scipy as sp
 import statsmodels.stats.multitest
+import warnings
 from typing import Literal, Iterable
 
 
@@ -442,17 +443,21 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare:str=None, p
     formula = f"values ~ {'/'.join(c for c in df.columns if c != 'values')}"
     matrix, treatment_col = hierarch.design.design_matrix(df, formula, treatment='treatment')
 
-    if len(data) == 1:
-        def summarize(boot):
-            return MCpValue(boot, np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0) # p-value, CI
-        boot = hierarchicalBootstrap(data[0], groups[0], **kwargs)
-        p_val = summarize(boot[0])[0] # return only p-value for now, CI not implemented for other conditions yet
-    elif len(data) == 2:
-        p_val = hierarch.stats.hypothesis_test(matrix, treatment_col=treatment_col, compare=compare, **kwargs)
-    else:
-        p_val = hierarch.stats.multi_sample_test(matrix, treatment_col=treatment_col, compare=compare, hypotheses=which, **kwargs)
-        if names is not None:
-            mapping = {float(i): n for i, n in enumerate(names)}
-            p_val.iloc[:,[0,1]] = p_val.iloc[:,[0,1]].replace(mapping)
+    with warnings.catch_warnings(record=True) as caught: # catch UserWarning from too-few levels
+        if len(data) == 1:
+            def summarize(boot):
+                return MCpValue(boot, np.zeros(boot.shape[1:])), np.nanpercentile(boot, [2.5,97.5], axis=0) # p-value, CI
+            boot = hierarchicalBootstrap(data[0], groups[0], **kwargs)
+            p_val = summarize(boot[0])[0] # return only p-value for now, CI not implemented for other conditions yet
+        elif len(data) == 2:
+            p_val = hierarch.stats.hypothesis_test(matrix, treatment_col=treatment_col, compare=compare, **kwargs)
+        else:
+            p_val = hierarch.stats.multi_sample_test(matrix, treatment_col=treatment_col, compare=compare, hypotheses=which, **kwargs)
+            if names is not None:
+                mapping = {float(i): n for i, n in enumerate(names)}
+                p_val.iloc[:,[0,1]] = p_val.iloc[:,[0,1]].replace(mapping)
+    for w in caught: # emit other warning
+        if "No levels to bootstrap. Setting bootstraps to zero." not in str(w.message):
+            warnings.warn_explicit(w.message, w.category, w.filename, w.lineno)
 
     return p_val
