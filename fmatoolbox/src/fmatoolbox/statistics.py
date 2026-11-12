@@ -262,8 +262,9 @@ def clusterPermutationTest(data1, data2=None, paired:bool=False, n_perm:int=1000
     return {'stat':stat, 'clusters':clusters, 'cluster_stat':cluster_stats, 'p_cluster':p_cluster, 'sig_mask':sig_mask, 'threshold':thresh}
 
 
-def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None, rng=None):
-    """hierarchical bootstrap estimate of the distribution of the mean of nested grouped observations
+def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, stat:Callable=None,  n_iter:int=None, rng=None,
+                          return_ci:bool=None, alpha:float=None):
+    """hierarchical bootstrap estimate of the distribution of a statistic of nested grouped observations
     note: this function is a wrapper around utilities of ``hierarch.resampling``, see Kulkarni et al. 2022 https://doi.org/10.1371/journal.pcbi.1010061
 
     Args:
@@ -271,14 +272,18 @@ def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None
         groups:    tuple containing hierarchical grouping variables for each condition, each of shape (n_samples_i, n_levels_i),
                    columns are ordered from outer to deepest level, e.g. groupx[:,0] = subject, groupx[:,1] = trial,
                    giving the hierarchy: subject -> trial -> observations
+        stat:      callable applied as ``stat(x, axis=0)`` to each resampled dataset x of shape (n_samples, n_features),
+                   must handle NaNs itself (e.g. ``np.nanmedian``); defaults to a fast NaN-ignoring mean
         skip:      levels that should not be resampled, defaults to ()
         n_iter:    number of bootstrap iterations, defaults to 5000
         rng:       ``np.random.Generator`` or seed, defaults to ``np.random.default_rng()``
+        return_ci: if True, also return percentile confidence intervals
+        alpha:     1 - confidence level, defaults to 0.05 for a 95% CI
 
     Returns:
-        means:     list of bootstrap distributions of the data mean, ignoring nans, shape depends on whether `y` is:
-                   - None, shape (n_iter, n_features) giving the bootstrap distribution of the mean of X
-                   - given, shape (n_iter, n_features, 3), with the last dimension being X, Y, X - Y
+        dists:     list (one per condition) of bootstrap distributions of `stat`, shape (n_iter, *stat_output_shape)
+        ci:        only if `return_ci`, list (one per condition) of arrays of shape (2, *stat_output_shape), whose rows
+                   are lower and upper percentile bound
     """
 
     try:
@@ -294,25 +299,28 @@ def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None
         groups = (groups,)
     if skip is None: skip = ()
     if n_iter is None: n_iter = 5000
-    if rng is None: rng = np.random.default_rng()
+    rng = np.random.default_rng(rng) # accepts None, a seed, or a Generator
+    if alpha is None: alpha = 0.05
+    elif not 0 < alpha < 1:
+        raise ValueError("alpha must be in (0, 1)")
+    fast_mean = stat is None
 
     # bootstrap each condition
-    means = []
-    for i, (d, g) in enumerate(zip(data,groups)):
+    dists = []; ci = []
+    for i, (d, g) in enumerate(zip(data, groups)):
 
         # validate shape
-        d, g = np.asarray(d), np.asarray(g)
+        d = np.asarray(d); g = np.asarray(g)
         if len(d) != len(g):
             raise ValueError(f"data[{i}] and groups[{i}] must have the same number of samples (rows)")
-        one_d = d.ndim == 1
-        if one_d: d = d[:,None]
+        if d.ndim == 1: d = d[:,None]
         if g.ndim == 1: g = g[:,None]
 
         # handle n-dimensional data
         trailing = d.shape[1:]
         d = d.reshape(len(d),-1) # (samples, prod(trailing))
         keep = ~np.isnan(d).all(axis=1) # drop slices that are entirely NaN
-        d, g = d[keep], g[keep]
+        d = d[keep]; g = g[keep]
 
         # set up design matrix
         df = pd.DataFrame(g, columns=[f"group{k}" for k in range(g.shape[1])])
@@ -327,12 +335,25 @@ def hierarchicalBootstrap(data, groups, skip:Iterable[int]=None, n_iter:int=None
         plan = hierarch.resampling.bootstrap_plan(X, skip=skip)
         w = hierarch.resampling.draw_bootstrap_weights_batch(plan, rng=rng, start=0, kind="weights", size=n_iter)
         d = d[order]
-        ok = ~np.isnan(d)
-        num = w @ np.where(ok, d, 0.0); den = w @ ok.astype(float)
-        m = np.divide(num, den, out=np.full(num.shape, np.nan), where=den > 0)
-        means.append(m.ravel() if one_d else m.reshape((n_iter,) + trailing))
 
-    return means
+        # statistic
+        if fast_mean:
+            ok = ~np.isnan(d)
+            num = w @ np.where(ok, d, 0.0)
+            den = w @ ok.astype(float)
+            m = np.divide(num, den, out=np.full(num.shape,np.nan), where=den > 0)
+            m = m.reshape((n_iter,) + trailing) # (n_iter, *trailing)
+        else:
+            idx_all = np.arange(len(d))
+            m = np.stack([np.asarray(stat(d[np.repeat(idx_all, wi)], axis=0)) for wi in w]) # (n_iter, *stat_output_shape)
+            if m.shape[1:] == (d.shape[1],):
+                m = m.reshape((n_iter,) + trailing) # per-feature output: restore trailing dims
+        dists.append(m)
+
+        if return_ci:
+            ci.append(np.nanpercentile(m, [100*alpha/2, 100*(1-alpha/2)], axis=0))
+
+    return (dists, ci) if return_ci else dists
 
 
 def hierarchicalBootstrapTest(data, groups=None, names=None, compare:str=None, paired:bool=None, which=None, **kwargs):
