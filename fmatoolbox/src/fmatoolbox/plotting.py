@@ -77,7 +77,7 @@ def figure(title:str=None, n:int|tuple[int,int]=None, size:tuple[float,float]=No
         projection:           projection of axis, defaults to cartesian axis
         constrained_layout:   if True (default), axis sizes are optimized by ``matplotlib.pyplot.subplots`` constrained_layout option
         format:               one of 'paper' or 'poster', 'poster' increases figure size, font sizes, and axes lines' width
-        **kwargs              all extra key-word arguments are passed to ``matplotlib.pyplot.subplots``
+        kwargs:               all extra key-word arguments are passed to ``matplotlib.pyplot.subplots``
 
     Returns:
         fig:                  matplotlib figure
@@ -110,11 +110,11 @@ def figure(title:str=None, n:int|tuple[int,int]=None, size:tuple[float,float]=No
 def setProp(axs:Axes|Iterable[Axes], xlabelcolor:dict[int,ColorType]=None, xtickvisible:dict[int,bool]=None, **kwargs):
     # set multiple axes properties at once
     #
-    # arguments:
+    # Args:
     #     axs             iterable of matplotlib.axes.Axes
     #     xlabelcolor     dict of {index: color}, color for the i-th xlabel, where index is i
     #     xtickvisible    dict of {index: bool}, whether to show the i-th major xtick, where index is i
-    #     **kwargs        all extra key-word arguments are passed to ``matplotlib.pyplot.set``
+    #     kwargs          all extra key-word arguments are passed to ``matplotlib.pyplot.set``
 
     # promote single axis to sequence
     if isinstance(axs,mpla._axes.Axes):
@@ -198,15 +198,14 @@ def setCLim(im:Collection,vmin:float|Sequence[float]=None,vmax:float|Sequence[fl
 def plot(x, y=None, *args, start=None, stop=None, polar:bool=None, ax:Axes=None, **kwargs):
     """wrapper around `matplotlib.pyplot.plot` with extra functionalities
 
-    arguments:
-        x              (n,) float = range(n), x coordinates (optional)
-        y              (n,) | (n,:) float, data to plot, each row corresponds to a value of x
-        start, stop    float, if given, only plot rows of `y` corresponding to `x` in the interval [start,stop] TO IMPLEMENT
-        polar          bool = False, if True, data is expected to span a full circle, `x[-1] + x[1] - x[0]` and `y[0]` are appended
+    Args:
+        x:             (n,) float = range(n), x coordinates (optional)
+        y:             (n,) | (n,:) float, data to plot, each row corresponds to a value of x
+        start, stop:   float, if given, only plot rows of `y` corresponding to `x` in the interval [start,stop] TO IMPLEMENT
+        polar:         bool = False, if True, data is expected to span a full circle, `x[-1] + x[1] - x[0]` and `y[0]` are appended
                        to `x` and `y` to close a circular plot, and eventual smoothing (NOT IMPLEMENTED!) is applied in a circular fashion
-        ax             matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
-
-    note: all extra arguments are passed to `matplotlib.pyplot.plot`
+        ax:            matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+        kwargs:        all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
     """
 
     if ax is None:
@@ -284,6 +283,7 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects;
                         can also be a dict of plt.colorbar kwargs
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
+        kwargs:         all extra key-word arguments are passed to ``matplotlib.axes.imshow``
 
     output:
         im              image
@@ -713,8 +713,8 @@ def pHorzLine(p, t=None, dy=None, color:ColorType=None, ax:Axes=None, **kwargs):
         t           (t,) float = range(n), time points
         dy          float, scale vertical distances between bars
         color       color, line color
-        ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
-        **kwargs    all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
+        ax:         axes to plot in, defaults to ``matplotlib.pyplot.gca()``
+        kwargs    all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
     """
 
     p = np.asarray(p).astype(float)
@@ -777,7 +777,7 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
         alpha        float, transparency, default is 0.7 for method 'discrete', 1.0 otherwise
         label        str = None, legend label for line
         ax:     axes to plot in, defaults to ``matplotlib.pyplot.gca()``
-        **kwargs     all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
+        kwargs     all extra key-word arguments are passed to ``matplotlib.pyplot.plot``
 
     output:
         grid         (n,) list of (n_points,) float, values of X_i for which the PDF was evalueated
@@ -839,7 +839,7 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
         offset:      y axis offset for the first row of the raster, defaults to 0
         height:      height of each row of the raster, defaults to 1
         ax:          axes to plot in, defaults to ``matplotlib.pyplot.gca()``
-        **kwargs     all extra key-word arguments are passed to ``matplotlib.pyplot.vlines``
+        kwargs     all extra key-word arguments are passed to ``matplotlib.pyplot.vlines``
     """
 
     # ADD: arg bin, which changes plot mode to color map of binned fr
