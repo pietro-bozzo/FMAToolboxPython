@@ -8,7 +8,8 @@ from numba import njit
 from typing import Literal, Callable
 
 
-def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None, step:int=None, smooth:float=None, g_range:tuple[int,int]=None):
+def istantaneousRate(samples, start:float=None, stop:float=None, bin:float=None, step:int=None,
+                     smooth:float=None, g_range:tuple[int,int]=None):
     """estimate the istantaneous rate of a point process from a realization of its time stamps, e.g., the firing rate from spike times
 
     arguments:
@@ -108,7 +109,8 @@ def histogramVectorized(x,nbins):
     return hist
 
 
-def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple[float,float]=None, n_bins:int=None, bin:float=None, step:int=None, smooth:float=None, fast:bool=False):
+def PETH(samples, events, groups=None, g_range:tuple[int,int]=None, limits:tuple[float,float]=None,
+         n_bins:int=None, bin:float=None, step:int=None, smooth:float=None, fast:bool=False):
     '''
     compute peri-event time histogram of a signal relative to synchronizing events
 
@@ -406,27 +408,38 @@ def CCG(samples, bin:float=None, limits:tuple[float,float]=None, fast:bool=None,
     return ccg, t
 
 
-def burst_index(samples):
+def burst_index(samples, id_range:tuple[int,int]=None):
     """estimate bursting index for point processes
     see ADD CITATION
 
     Args:
         samples:   2-column array of time stamps and process ids; if 1d, ids are all 0
+        id_range:  range of ids to consider (boundaries included), defaults to `(min(samples[:,1]), max(samples[:,1]))`
     """
 
     samples = np.asarray(samples)
     if samples.ndim == 1:
         times = samples
         ids = np.zeros_like(times, dtype=np.int64)
+        id_min = 0; id_max = 0
     elif samples.shape[1] == 2:
         times = samples[:,0]
         ids = samples[:,1].astype(np.int64)
+        if id_range is None:
+            if len(ids):
+                id_min, id_max = np.unique(ids).astype(int)[[0,-1]]
+            else:
+                id_min = 0; id_max = -1
+        else:
+            id_min = int(id_range[0]); id_max = int(id_range[-1])
     else:
         raise ValueError("'samples' must be (n,) or (n,2)")
+    n_ids = id_max - id_min + 1
+    burst_idx = np.full(n_ids, np.nan)
 
     unique_ids = np.unique(ids)
-    burst_idx = np.full(len(unique_ids), np.nan)
-    for i, id in enumerate(unique_ids):
+    unique_ids = unique_ids[(unique_ids >= id_min) & (unique_ids <= id_max)]
+    for id in unique_ids:
 
         t_spk = times[ids == id]
         if len(t_spk) <= 10:
@@ -441,9 +454,9 @@ def burst_index(samples):
         baseline = acg[90:].mean()
         idx = peak - baseline
         if idx < 0:
-            burst_idx[i] = idx / baseline
+            burst_idx[id - id_min] = idx / baseline
         elif idx > 0:
-            burst_idx[i] = idx / peak
+            burst_idx[id - id_min] = idx / peak
 
     return burst_idx
 
