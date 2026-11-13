@@ -80,12 +80,13 @@ def holmBonferroni(pvals, alpha:float=0.05, return_reject:bool=False):
 def maxStatisticTest(data, surrogate, statistic=None, group=None, alpha:float=0.05, alternative:str='two-sided'):
    """conduct a max statistic test over time, assessing in which time points the null hypothesis about a statistic across sessions can be rejected
 
-   arguments:
-       data           (sessions, times) float
-       surrogate      (sessions, times, surrogates) float
-       group          (sessions,) int, grouping variable used to aggregate sessions, the statistic is computed per group and then again over groups
-       alpha          float = 0.05, significance level, must be in [0,1]
-       alternative    str = {'two-sided','grater','less'}, test direction, defines the null hypothesis
+   Args:
+       data:           (sessions, times) float
+       surrogate:      (sessions, times, surrogates) float
+       statistic:      callable, defaults to ``np.nanmean(x, axis=0)``
+       group:          (sessions,) int, grouping variable used to aggregate sessions, the statistic is computed per group and then again over groups
+       alpha:          float = 0.05, significance level, must be in [0,1]
+       alternative:    str = {'two-sided','grater','less'}, test direction, defines the null hypothesis
    """
 
    data = np.array(data,ndmin=2)
@@ -390,7 +391,7 @@ def hierarchicalBootstrapTest(data, groups=None, names=None, compare:str=None, p
                    - 3 or more: pandas DataFrame with columns Condtion 1, Condition 2, p-value, Corrected p-value
     """
 
-    # NOTE: paired mode possibly fails to reject when more than value per (group0, condition), so lower levels should be averaged first??
+    # NOTE: paired mode possibly fails to reject when more than one value per (group0, condition), so lower levels should be averaged first??
 
     try:
        import hierarch
