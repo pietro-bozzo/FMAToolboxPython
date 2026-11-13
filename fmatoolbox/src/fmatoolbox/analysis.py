@@ -379,7 +379,7 @@ def CCG(samples, bin:float=None, limits:tuple[float,float]=None, fast:bool=None,
     samples = np.asarray(samples)
     if samples.ndim == 1:
         times = samples.astype(np.float64)
-        id = np.zeros(len(times),dtype=np.int64)
+        id = np.zeros(len(times), dtype=np.int64)
     elif samples.shape[1] == 2:
         times = samples[:,0].astype(np.float64)
         id = samples[:,1].astype(np.int64)
@@ -404,6 +404,48 @@ def CCG(samples, bin:float=None, limits:tuple[float,float]=None, fast:bool=None,
         ccg = ccg.astype(float) / (np.sqrt(n_samples[:,None,None]) * np.sqrt(n_samples[None,:,None]) * bin)
 
     return ccg, t
+
+
+def burst_index(samples):
+    """estimate bursting index for point processes
+    see ADD CITATION
+
+    Args:
+        samples:   2-column array of time stamps and process ids; if 1d, ids are all 0
+    """
+
+    samples = np.asarray(samples)
+    if samples.ndim == 1:
+        times = samples
+        ids = np.zeros_like(times, dtype=np.int64)
+    elif samples.shape[1] == 2:
+        times = samples[:,0]
+        ids = samples[:,1].astype(np.int64)
+    else:
+        raise ValueError("'samples' must be (n,) or (n,2)")
+
+    unique_ids = np.unique(ids)
+    burst_idx = np.full(len(unique_ids), np.nan)
+    for i, id in enumerate(unique_ids):
+
+        t_spk = times[ids == id]
+        if len(t_spk) <= 10:
+            continue
+        ccg, t = CCG(t_spk, bin=0.001, limits=(-0.0505,0.0505))
+        # sanity check: t[50] should be ~0 (zero-lag bin)
+        if t[50] != 0:
+            print(f'WARNING: central bin = {t[50]} s for id = {id}')
+
+        acg = ccg.ravel()
+        peak = acg[51:61].max()
+        baseline = acg[90:].mean()
+        idx = peak - baseline
+        if idx < 0:
+            burst_idx[i] = idx / baseline
+        elif idx > 0:
+            burst_idx[i] = idx / peak
+
+    return burst_idx
 
 
 def PDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None,
