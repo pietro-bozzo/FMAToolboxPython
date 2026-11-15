@@ -745,7 +745,7 @@ def pHorzLine(p, t=None, dy=None, color:ColorType=None, ax:Axes=None, **kwargs):
     return
 
 
-def plotIntervals(intervals, color:ColorType='gray', alpha=0.3, label:str=None, ax:Axes=None, **plot_kwargs):
+def plotIntervals(intervals, start=None, stop=None, color:ColorType='gray', alpha=0.3, label:str=None, ax:Axes=None, **plot_kwargs):
 
     intervals = fmatoolbox.intervals.consolidate(intervals)
     if intervals.size == 0:
@@ -753,10 +753,19 @@ def plotIntervals(intervals, color:ColorType='gray', alpha=0.3, label:str=None, 
     if ax is None:
         ax = plt.gca()
 
+    valid = np.ones(len(intervals), dtype=bool)
+    if start is not None:
+        valid[intervals[:,1] < start] = False
+    if stop is not None:
+        valid[intervals[:,0] > stop] = False
+    intervals = intervals[valid]
+    if intervals.size == 0:
+        return
+
     draw = lambda a, b, _label : ax.axvspan(a, b, facecolor=color, edgecolor='none', alpha=alpha, label=_label, **plot_kwargs)
     draw(intervals[0,0], intervals[0,1], label)
-    for start, stop in intervals[1:]:
-        draw(start, stop, None)
+    for begin, end in intervals[1:]:
+        draw(begin, end, None)
 
 
 def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','discrete']=None, bandwidth:float|str=None, eps:float=None, n_points:int=None,
@@ -876,6 +885,7 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
     if offset:
         units += offset
 
+    units *= height
     ax.vlines(times, units-height/2, units+height/2, **kwargs)
 
     return
