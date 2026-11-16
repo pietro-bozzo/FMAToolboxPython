@@ -881,7 +881,7 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
         units = units[valid]
     # relabel units from 0 to N - 1
     if compact:
-        _, units = np.unique(units, return_inverse=True)
+        units = np.unique(units, return_inverse=True)[1].astype(float)
     if offset:
         units += offset
 
