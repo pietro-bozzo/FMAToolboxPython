@@ -620,7 +620,7 @@ def boxPlot(data:ArrayLike|Sequence[ArrayLike], x:ArrayLike=None, mode:Literal['
     if 'scatter' in mode:
         jitter = lambda a : a + np.random.normal(0, (x[1]-x[0])/15, size=len(a))
         x_drawn = [jitter(xi) for xi in x_drawn]
-        out.append( [ax.scatter(x_drawn[i], data[i], c=color[i], alpha=0.7) for i in range(n_data)] )
+        out.append( [ax.scatter(x_drawn[i], data[i], color=color[i], alpha=0.7) for i in range(n_data)] )
 
     if 'link' in mode:
         out.append( [ax.plot(np.stack([x_drawn[i],x_drawn[i+1]]), np.stack([data[i],data[i+1]]), color='gray', alpha=0.5) for i in range(n_data-1)] )
