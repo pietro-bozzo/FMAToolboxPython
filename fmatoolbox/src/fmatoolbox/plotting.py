@@ -258,9 +258,9 @@ def plotXY(data, start:float=None, stop:float=None, color:ColorType=None, label=
     return
 
 
-def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:ArrayLike|Callable|str=None, sortax:int=None,
-                 xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None, aspect:str|float=None, bar:str|dict=None,
-                 ax:Axes=None, **kwargs):
+def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, omitnan:int=None, sortby:ArrayLike|Callable|str=None,
+                 sortax:int=None, xzoom:float=None, yzoom:float=None, smooth=None, alpha=None, x=None, y=None,
+                 aspect:str|float=None, interpolation:str=None, bar:str|dict=None, ax:Axes=None, **kwargs):
     """plot a 2D array as a colormap with optional normalization, sorting, and resampling
 
     arguments:
@@ -278,8 +278,9 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         smooth          float | (float,float) = None, standard deviation of gaussian kernel passed to ``scipy.ndimage.gaussian_filter`` (after zoom)
         alpha           float | (n,m) float = None, transparency mask for `data` (e.g., to show significance of pixels), values must be in [0,1]
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
-        aspect          str | float | None, same behavior as aspect parameter of imshow, 'auto' to keep axis aspect ration,
-                        'preserve' to keep it even when a colorbar is drawn
+        aspect          str | float | None, same behavior as aspect parameter of imshow, default 'auto' to keep axis aspect ratio,
+                        pass 'preserve' to prevent ir from changing when a colorbar is drawn
+        interpolation   same behavior as interpolation parameter of imshow, default 'none'
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects;
                         can also be a dict of plt.colorbar kwargs
         ax              matplotlib.axes.Axes = matplotlib.pyplot.gca(), axes to plot in
@@ -290,7 +291,11 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         cb              colorbar, optional
     """
 
+    # defaults
     data = np.array(data, ndmin=2)
+    if sortax is None: sortax = 0
+    if aspect is None: aspect = 'auto'
+    if interpolation is None: interpolation = 'none'
     if ax is None:
         ax = plt.gca()
     bb = ax.get_position()
@@ -308,7 +313,6 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     n_y, n_x = data.shape # store shape in case data needs to be zoomed
 
     # 3. sort rows / columns
-    if sortax is None: sortax = 0
     if sortby is not None:
         if isinstance(sortby,str) and sortby.startswith('peak'):
             peaks = np.argmax(data,1-sortax)
