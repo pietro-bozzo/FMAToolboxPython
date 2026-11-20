@@ -841,7 +841,8 @@ def plotPDF(x, mode:Literal['normal','log','polar']=None, method:Literal['kde','
     return grid, density
 
 
-def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None, compact:bool=None, offset:float=None, height:float=None, ax:Axes=None, **kwargs):
+def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None, compact:bool=None,
+               offset:float=None, height:float=None, lw:float=None, ax:Axes=None, **kwargs):
     """draw a raster plot of a point process, e.g., spike times of different neurons
 
     Args:
@@ -850,7 +851,8 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
         ids:         if given, only plot rows of `spikes` whose id is in `ids`
         compact:     if True, remove empty rows in the raster plot when an id is missing in `spikes` or `ids`, defaults to False
         offset:      y axis offset for the first row of the raster, defaults to 0
-        height:      height of each row of the raster, defaults to 1
+        height:      height of each row of the raster, default 1
+        lw:          line width of ticks marking events in the raster, default 0.5 * axes' spine width
         ax:          axes to plot in, defaults to ``matplotlib.pyplot.gca()``
         kwargs     all extra key-word arguments are passed to ``matplotlib.pyplot.vlines``
     """
@@ -861,6 +863,7 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
     if height is None: height = 1
     if ax is None:
         ax = plt.gca()
+    if lw is None: lw = ax.spines['bottom'].get_linewidth() * 0.5
     spikes = np.asarray(spikes)
     if spikes.ndim == 1:
         times = spikes
@@ -890,6 +893,6 @@ def plotRaster(spikes, start:float=None, stop:float=None, ids:Iterable[int]=None
         units += offset
 
     units *= height
-    ax.vlines(times, units-height/2, units+height/2, **kwargs)
+    ax.vlines(times, units-height/2, units+height/2, lw=lw, **kwargs)
 
     return
