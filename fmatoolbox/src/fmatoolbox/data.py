@@ -463,40 +463,42 @@ def loadSpikeWaveforms(session:str|PathLike[str]):
     return
 
 
-def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals=None, skip:int=None, cat:bool=None, trim:bool=None):
+def loadWideband(session:str|PathLike[str], lfp:bool=None, dtype=None, channels=None, intervals=None, skip:int=None,
+                 cat:bool=None, trim:bool=None):
     """load wideband data for a session, which is organized in records: chunks of data containing one sample for each channel
 
-    arguments:
-        session      path to session's .xml file, .dat file must be in session folder
-        dtype        type = np.int16
-        channels     (:,) int = None, channels to load, if None, load all channels; counted base 0 as NeuroScope
-        intervals    (:,2) float = None, time intervals to load, if None, load all data
-        skip         int = 0, number of records to skip after each record is read (to subsample data)
-        cat          bool = True, concatenate loaded data along time dimension; if False, return a list of arrays for each interval
-        trim         bool = False, trim each loaded chunk of data so that they all have the same number of time points (useful if
-                     'intervals' are of the same length)
+    Args:
+        session:     path to session's .xml file, .dat file must be in session folder
+        lfp:         if True, load .lfp file (a downsampled and filtered version of raw data) instead of .dat
+        dtype:       data type encoded in the .dat file, default np.int16
+        channels:    (:,) int = None, channels to load, if None, load all channels; counted base 0 as NeuroScope
+        intervals:   (:,2) float = None, time intervals to load, if None, load all data
+        skip:        int = 0, number of records to skip after each record is read (to subsample data)
+        cat:         bool = True, concatenate loaded data along time dimension; if False, return a list of arrays for each interval
+        trim:        bool = False, trim each loaded chunk of data so that they all have the same number of time points (useful if
+                    'intervals' are of the same length)
 
     output:
-        data         (records, channels) dtype, data for each channel, each row is a record; list of arrays if 'cat' is False
-        t            (records,) float, time of each record; list of arrays if 'cat' is False (contrary to FMAT standard 't' returned
+        data:        (records, channels) dtype, data for each channel, each row is a record; list of arrays if 'cat' is False
+        t:           (records,) float, time of each record; list of arrays if 'cat' is False (contrary to FMAT standard 't' returned
                      separately from 'data' to preserve different data types)
     """
 
     file_root = pathlib.Path(session).with_suffix("")
-    dat_file = file_root.with_suffix(".dat")
+    dat_file = file_root.with_suffix(".lfp" if lfp else ".dat")
 
-    # load parameters n_channels from .xml
+    # load parameters from .xml
     tree = xml.etree.ElementTree.parse(file_root.with_suffix(".xml"))
     root = tree.getroot()
-    frequency = float(root.find(".//samplingRate").text)
+    frequency = float(root.find(".//lfpSamplingRate" if lfp else ".//samplingRate").text)
     n_channels = int(root.find(".//nChannels").text)
 
     if dtype is None: dtype = np.int16
-    if channels is not None: channels = np.array(channels,ndmin=1)
+    if channels is not None: channels = np.array(channels, ndmin=1)
     if skip is None: skip = 0
     if cat is None: cat = True
     if intervals is None: intervals = [[0,np.inf]]
-    intervals = np.array(intervals,ndmin=2)
+    intervals = np.array(intervals, ndmin=2)
 
     # handle empty output
     if intervals.size == 0:
@@ -511,7 +513,7 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
     results = []
     t = []
     min_len = np.inf
-    with open(dat_file,'rb') as f:
+    with open(dat_file, 'rb') as f:
         for start, stop in intervals:
 
             # locate 'start' in file
@@ -561,11 +563,29 @@ def loadWideband(session:str|PathLike[str], dtype=None, channels=None, intervals
     return results, t
 
 
-def loadLFP(session:str|PathLike[str]):
+def loadLFP(session:str|PathLike[str], dtype=None, channels=None, intervals=None, skip:int=None, cat:bool=None,
+            trim:bool=None, **kwargs):
+    """load LFP data for a session, which is organized in records: chunks of data containing one sample for each channel
+    wrapper around ``loadWideband``
 
-    print('implement!')
+    Args:
+        session:     path to session's .xml file, .dat file must be in session folder
+        dtype:       data type encoded in the .dat file, default np.int16
+        channels:    (:,) int = None, channels to load, if None, load all channels; counted base 0 as NeuroScope
+        intervals:   (:,2) float = None, time intervals to load, if None, load all data
+        skip:        int = 0, number of records to skip after each record is read (to subsample data)
+        cat:         bool = True, concatenate loaded data along time dimension; if False, return a list of arrays for each interval
+        trim:        bool = False, trim each loaded chunk of data so that they all have the same number of time points (useful if
+                    'intervals' are of the same length)
 
-    return
+    output:
+        data:        (records, channels) dtype, data for each channel, each row is a record; list of arrays if 'cat' is False
+        t:           (records,) float, time of each record; list of arrays if 'cat' is False (contrary to FMAT standard 't' returned
+                     separately from 'data' to preserve different data types)
+    """
+
+    return loadWideband(session=session, lfp=True, dtype=dtype, channels=channels, intervals=intervals, skip=skip,
+                        cat=cat, trim=trim, **kwargs)
 
 
 def makeAnatFile(session:str|PathLike[str]):
@@ -651,16 +671,16 @@ def readBatchFile(file_path:str|PathLike[str]):
 
 def _batchWorker(payload):
     # private function to unpack payload and dispatch it to `func` inside runBatc
-    i, func, session, args, extra_args, kwargs, seed = payload
+    i, func, session, args, extra_args, kwargs, seed, common_kwargs = payload
     try:
-        result = func(session,*args,*extra_args,**kwargs,**seed)
+        result = func(session, *args, *extra_args, **kwargs, **seed, **common_kwargs)
         return i, result
     except Exception as e:
         return -i-1, e
 
 
 def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=None, rnd_seed:str=None, kwargs:dict|list[dict]=None, ignore_args:bool=False,
-             sessions:list[int]=None, parallel:bool|int=None, drop_fail:bool=None, verbose:bool=None) -> tuple[list, ...]:
+             sessions:list[int]=None, parallel:bool|int=None, drop_fail:bool=None, verbose:bool=None, **common_kwargs) -> tuple[list, ...]:
     """run a routine on multiple sessions
 
     Args:
@@ -676,6 +696,7 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
                         the number of workers, defaults to no parallelization
         drop_fail:      if True, drop sessions that fail, defaults to False
         verbose:        if True, log progress, defaults to True
+        common_kwargs:  all extra key-word arguments are passed to every call of `func`
 
     Returns:
         variable outputs matching `func`'s signature
@@ -727,7 +748,7 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
         for i, session in enumerate(sessions_list):
             verbose and print(f'Batch progress: {session}, {i+1} out of {n_sessions}')
             try:
-                results[i] = func(session,*args[i],*extra_args[i],**kwargs[i],**seeds[i])
+                results[i] = func(session,*args[i],*extra_args[i],**kwargs[i],**seeds[i],**common_kwargs)
             except Exception as e:
                 # log error to console
                 errors[-i-1] = e
@@ -742,7 +763,7 @@ def runBatch(batch_file:str|PathLike[str], func:Callable, args:list[list[Any]]=N
     # 2. Parallel Batch
     else:
         # pack arguments into payloads
-        payloads = [(i,func,s,args[i],extra_args[i],kwargs[i],seeds[i]) for i, s in enumerate(sessions_list)]
+        payloads = [(i,func,s,args[i],extra_args[i],kwargs[i],seeds[i],common_kwargs) for i, s in enumerate(sessions_list)]
         if parallel is True:
             parallel = None # to keep default max_workers
         with loky.get_reusable_executor(max_workers=parallel) as ex:
