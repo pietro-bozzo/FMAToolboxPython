@@ -409,14 +409,13 @@ class regions:
             return_reg:   if True, also return list of regions per unit
 
         Returns:
-            units:        unit ids belonging to any of `regs` or `e_groups`, input order is preserved
-            reg:          region id of each element of `units` (optional)
+            units:        array of unit ids belonging to any of `regs` or `e_groups`, input order is preserved
+            reg:          array of region ids for each element of `units` (optional)
         """
 
         regs, e_groups, _ = self._checkIDs(regs=regs, e_groups=e_groups)
 
-        units = []
-        unit_reg = []
+        units = []; unit_reg = []
         for r in regs:
             # validate spikes
             if 'e_group' not in self.region[r]:
@@ -432,6 +431,7 @@ class regions:
                         u = self.region[r]['e_group'][g]
                         units.extend(u)
                         unit_reg.extend(np.full(len(u), r))
+        units = np.array(units); unit_reg = np.array(unit_reg)
 
         if return_reg:
             return units, unit_reg
