@@ -488,22 +488,21 @@ class regions:
 
     def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, when=None, shift:bool=None, window:float=None, step:int=None,
                    smooth:float=None, norm:bool=None):
-        """
-        get population firing rate per region
+        """compute population firing rate (Hz) per region and / or electrode group
 
-        arguments:
-            regs        (n,) string = None, brain regions to compute firing rate of, default is all regions
-            e_groups    (m,) int = None, electrode groups (starting at 1) to compute firing rate of, default is none
-            when        DESCRIBE, same input as eventIntervals
-            shift       bool = False, shift epochs together in time after filtering by 'when'
-            window      float = 0.05 s, bin size to count spikes
-            step        int = 1, firing rate is computed with bins of length 'window' and overlap 'window' / 'step',
-                        default is no overlap
-            smooth      float = None, gaussian kernel std to smooth rate over time
-            norm        bool = False, normalize by neuron number per region
+        Args:
+            regs:       `n` brain regions to compute firing rate of, default is all regions
+            e_groups:   `m` electrode groups (starting at 1) to compute firing rate of, default is none
+            when:       DESCRIBE, same input as eventIntervals
+            shift:      if True, shift epochs together in time after filtering by `when`
+            window:     float = 0.05 s, bin size to count spikes
+            step:       firing rate is computed with bins of length `window` and overlap `window/step`, default 1
+                        (no overlap)
+            smooth:     gaussian kernel std to smooth rate over time, default is no smoothing
+            norm:       if True, normalize `rate` by number of neurons per region, yielding Hz / unit
 
-        output:
-            rate        (:,n+m+1) float, every row is [time stamp (s), firing rates for n regions, firing rates for m electrodes],
+        Returns:
+            rate:       2d array, every row is [time stamp (s), firing rates for `n` regions, firing rates for `m` electrodes],
                         input order of regions and electrodes is preserved
         """
 
