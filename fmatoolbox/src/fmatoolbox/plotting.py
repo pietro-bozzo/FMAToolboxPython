@@ -278,8 +278,8 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
         smooth          float | (float,float) = None, standard deviation of gaussian kernel passed to ``scipy.ndimage.gaussian_filter`` (after zoom)
         alpha           float | (n,m) float = None, transparency mask for `data` (e.g., to show significance of pixels), values must be in [0,1]
         x, y            (:,) float, coordinates corresponding to columns and rows of `data`, defaults are range(m) and range(n)
-        aspect          str | float | None, same behavior as aspect parameter of imshow, default 'auto' to keep axis aspect ratio,
-                        pass 'preserve' to prevent ir from changing when a colorbar is drawn
+        aspect          str | float | None, same behavior as aspect parameter of imshow, pass 'auto' to keep axis aspect ratio,
+                        pass 'preserve' to prevent it from changing when a colorbar is drawn
         interpolation   same behavior as interpolation parameter of imshow, default 'none'
         bar             str = None, if given, draw colorbar next to `ax` with label specified by `bar`, and return both `im` and `cb` objects;
                         can also be a dict of plt.colorbar kwargs
@@ -294,7 +294,6 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     # defaults
     data = np.array(data, ndmin=2)
     if sortax is None: sortax = 0
-    if aspect is None: aspect = 'auto'
     if interpolation is None: interpolation = 'none'
     if ax is None:
         ax = plt.gca()
