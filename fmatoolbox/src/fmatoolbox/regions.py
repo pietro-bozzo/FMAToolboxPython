@@ -400,49 +400,40 @@ class regions:
         return np.array([x for outer in values for inner in outer for x in inner])
 
 
-    def units(self,regs=None,e_groups=None,return_reg=None):
-        '''
-        get pooled list of units for a list of regions
+    def units(self, regs=None, e_groups=None, return_reg:bool=None):
+        """get pooled list of units from a list of regions
 
-        arguments:
-            regs          (:,) string = None, regions to fetch units for, default is all regions
-            e_groups      (:,) int = None, electrode groups (starting at 1) to fetch units for, default is none
-            return_reg    bool = False, if True, also return list of region per unit
+        Args:
+            regs:         regions to fetch units for, default is all regions
+            e_groups:     electrode groups (starting at 1) to fetch units for, default is none
+            return_reg:   if True, also return list of regions per unit
 
-        output:
-            units         (n,) int, unit ids belonging to any of 'regs' or 'e_groups', sorted by value
-            reg           (n,) string, region id of each element of 'units' (optional)
-        '''
+        Returns:
+            units:        unit ids belonging to any of `regs` or `e_groups`, input order is preserved
+            reg:          region id of each element of `units` (optional)
+        """
 
-        regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups)
+        regs, e_groups, _ = self._checkIDs(regs=regs, e_groups=e_groups)
 
         units = []
         unit_reg = []
-        for r in self.ids:
-
+        for r in regs:
             # validate spikes
             if 'e_group' not in self.region[r]:
                 raise ValueError('spikes were not loaded')
+            u = np.sort(np.concatenate(list(self.region[r]['e_group'].values())))
+            units.extend(u)
+            unit_reg.extend(np.full(len(u), r))
 
-            if r in regs:
-                u = list(self.region[r]['e_group'].values())
-                units.extend(u)
-                u_r = [np.full(len(_u),r) for _u in u]
-                unit_reg.extend(u_r)
-
-            elif np.any(e_groups != [None]):
-                for g, u in self.region[r]['e_group'].items():
-                    if g in e_groups:
-                        units.append(u)
-                        unit_reg.append(np.full(len(u),r))
-
-        units = np.concatenate(units) if len(units) else np.array(units)
-        order = np.argsort(units)
-        units = units[order]
+        if np.any(e_groups != [None]):
+            for g in e_groups:
+                for r in self.ids:
+                    if g in self.region[r]['e_group']:
+                        u = self.region[r]['e_group'][g]
+                        units.extend(u)
+                        unit_reg.extend(np.full(len(u), r))
 
         if return_reg:
-            unit_reg = np.concatenate(unit_reg) if len(unit_reg) else np.array(unit_reg)
-            unit_reg = unit_reg[order]
             return units, unit_reg
         return units
 
