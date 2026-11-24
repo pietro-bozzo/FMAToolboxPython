@@ -416,17 +416,21 @@ class regions:
         regs, e_groups, _ = self._checkIDs(regs=regs, e_groups=e_groups)
 
         units = []; unit_reg = []
-        for r in regs:
-            # validate spikes
-            if 'e_group' not in self.region[r]:
-                raise ValueError('spikes were not loaded')
-            u = np.sort(np.concatenate(list(self.region[r]['e_group'].values())))
-            units.extend(u)
-            unit_reg.extend(np.full(len(u), r))
+        if np.any(regs != [None]):
+            for r in regs:
+                # validate spikes
+                if 'e_group' not in self.region[r]:
+                    raise ValueError('spikes were not loaded')
+                u = np.sort(np.concatenate(list(self.region[r]['e_group'].values())))
+                units.extend(u)
+                unit_reg.extend(np.full(len(u), r))
 
         if np.any(e_groups != [None]):
             for g in e_groups:
                 for r in self.ids:
+                    # validate spikes
+                    if 'e_group' not in self.region[r]:
+                        raise ValueError('spikes were not loaded')
                     if g in self.region[r]['e_group']:
                         u = self.region[r]['e_group'][g]
                         units.extend(u)
@@ -438,7 +442,7 @@ class regions:
         return units
 
 
-    def spikes(self,regs=None,e_groups=None,when=None,shift=False):
+    def spikes(self, regs=None, e_groups=None, when=None, shift:bool=False):
         '''
         get pooled spikes samples for a list regions
         NOTE: explain that the f returns spikes coming form union of 'regs' and 'e_groups'
@@ -453,7 +457,7 @@ class regions:
             spikes      (:,2) float, each row is [spike time (s), unit id], time sorted
         '''
 
-        regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups)
+        regs, e_groups, _ = self._checkIDs(regs=regs, e_groups=e_groups)
 
         spikes = []
         e_group_units = self.units(e_groups=e_groups)
@@ -472,7 +476,62 @@ class regions:
         spikes = spikes[spikes[:,0].argsort()]
 
         return spikes
-    
+
+
+    def mua(self, regs=None, e_groups=None, clusters:bool=None, when=None, shift:bool=None):
+        """get pooled MUA samples for a list regions
+        NOTE: explain that the f returns spikes coming form union of 'regs' and 'e_groups'
+
+        Args:
+            regs:      (:,) string = None, regions to fetch MUA for, default is all regions
+            e_groups:  (:,) int = None, electrode groups (starting at 1) to fetch MUA for, default is none
+            clusters:  if True, also return clustered spikes together with MUA, default is only MUA
+            when:      DESCRIBE, same input as eventIntervals
+            shift:     if True, shift epochs together in time after filtering by `when`
+
+        Returns:
+            mua:       (:,2) float, each row is [spike time (s), unit id], time sorted
+        """
+
+        regs, e_groups, _ = self._checkIDs(regs=regs, e_groups=e_groups)
+
+        def remap_ids(spk, group):
+            # build flat key, value pairs
+            keys = np.repeat(np.array(list(group.keys())), [len(v) for v in group.values()])
+            vals = np.concatenate(list(group.values()))
+            # sort by value to use searchsorted
+            order = np.argsort(vals)
+            vals = vals[order]; keys = keys[order]
+            idx = np.minimum(np.searchsorted(vals,spk[:,1]), len(vals)-1) # avoid out-of-bounds
+            matched = vals[idx] == spk[:,1]
+            spk[matched,1] = keys[idx[matched]]
+            return spk
+
+        mua = []
+        e_group_units = self.units(e_groups=e_groups)
+        for r in self.ids: # per region
+            if r in regs: # if r is requested, keep all
+                mua.append(self.region[r]['mua'])
+                if clusters:
+                    # swap unit ids for groups
+                    mua.append(remap_ids(self.region[r]['spikes'], self.region[r]['e_group']))
+            elif np.any(e_groups != [None]): # if e_groups are requested, keep only those groups
+                m = self.region[r]['mua']
+                mua.append(m[np.isin(m[:,1],e_groups),:])
+                if clusters:
+                    spikes = self.region[r]['spikes']
+                    spikes = spikes[np.isin(spikes[:,1],e_group_units),:]
+                    mua.append(remap_ids(spikes, self.region[r]['e_group']))
+
+        mua = np.concatenate(mua)
+        # restrict to 'when'
+        if when is not None:
+            mua = fmatoolbox.intervals.restrict(mua, self.eventIntervals(when), shift=shift)
+        # sort by time
+        mua = mua[mua[:,0].argsort()]
+
+        return mua
+
 
     ## functions to compute quantities ##
 
