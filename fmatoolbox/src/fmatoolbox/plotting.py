@@ -373,8 +373,9 @@ def plotColorMap(data:ArrayLike, vmin:float=None, vmax:float=None, zscore=None, 
     return im
 
 
-def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None, color:ColorType=None, mode:Literal['area','error','bar']=None,
-            alpha:float=None, label:str=None, lprop:dict=None, aprop:dict=None, ax:Axes=None):
+def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, polar:int=None, smooth:float=None,
+            color:ColorType=None, mode:Literal['area','error','bar']=None, alpha:float=None, traces:bool=None,
+            label:str=None, lprop:dict=None, aprop:dict=None, ax:Axes=None):
     """plot mean +/- confidence intervals of matrix data
 
     Args:
@@ -395,6 +396,7 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
         color:     color
         mode:      style of the confidence intervals, either 'area' for a shaded area (default), 'error' for error bars, or 'bar' for a bar plot
         alpha:     area transparency value, defaults to 0.5, only for 'area' and 'bar' mode
+        traces:    if True, plot rows of `y` as background curves
         label:     optional legend label for line
         lprop:     dict of keyword arguments passed to ``matplotlib.pyplot.plot``
         aprop:     dict of keyword arguments passed to ``matplotlib.pyplot.fill_between`` (only for `mode='area'`)
@@ -500,18 +502,20 @@ def semPlot(x, y=None, saxis:int=None, ci:str|Callable=None, zscore:int=None, po
             y_low = np.concatenate((y_low, y_low[:n_x]))
             y_high = np.concatenate((y_high, y_high[:n_x]))
 
+    if traces:
+        ax.plot(x, y.T, color=lprop['color'], alpha=0.1)
     copy_color = 'color' in aprop and aprop['color'] is None
     match mode:
         case 'area':
-            l = ax.plot(x,y_line,**lprop)
+            l = ax.plot(x, y_line, **lprop)
             if copy_color:
                 aprop['color'] = l[0].get_color()
             ax.fill_between(x, y_low, y_high, **aprop)
         case 'error':
-            ax.errorbar(x,y_line,yerr=[y_low,y_high],marker='o',**lprop)
+            ax.errorbar(x, y_line, yerr=[y_low,y_high], marker='o', **lprop)
         case 'bar':
             width = x[1] - x[0]
-            ax.bar(x,y_line,width=width,yerr=[y_line-y_low,y_high-y_line],**aprop)
+            ax.bar(x, y_line, width=width, yerr=[y_line-y_low,y_high-y_line], **aprop)
 
     return
 
