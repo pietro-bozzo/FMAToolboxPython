@@ -124,11 +124,11 @@ class regions:
             if not anat_file.exists():
                 anat_file = _regionDataPath() / anat_file
         if load_spikes:
-            self.region = fmatoolbox.data.loadSpikeTimes(session,output='regions',anat_file=anat_file,reload=reload)
+            self.region = fmatoolbox.data.load_spikes(session,output='regions',anat_file=anat_file,reload=reload)
             if ids:
                 self.region = {r: self.region[r] for r in ids}
             else:
-                self.ids = np.array(list(self.region.keys()),dtype=str)
+                self.ids = np.array(list(self.region.keys()), dtype=str)
             if not self.all_epochs:
                 # restrict spikes to session epochs
                 for id in self.ids:

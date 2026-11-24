@@ -1,8 +1,9 @@
-""" Functions to load data for a recording session """
+"""Functions to load data for a recording session"""
+from xml.parsers import expat
 
+import numpy as np
 import pathlib
 import scipy.io
-import numpy as np
 import ast
 import datetime
 import traceback
@@ -15,122 +16,80 @@ from typing import Any, Callable
 from os import PathLike
 
 
-def loadSpikeTimes(session:str|PathLike[str], output:str='dict', anat_file:str=None, return_elec:bool=False, return_loc:bool=False, reload:bool=False):
+def load_spikes(session:str|PathLike[str], output:str=None, anat_file:str=None, return_elec:bool=None, return_loc:bool=None, reload:bool=None):
     """load spikes for a session
+    attemps to load spikes from the following formats (in this order): 1. KlustaKwik (.clu and .res), 2. CellExplorer (.cell_metrics.cellinfo.mat)
 
-    arguments:
-        session        path to session's .xml file, spike files must be in session folder
-        output         string = None, determines output type, either:
+    Args:
+        session:        path to session's .xml file, spike files must be in session folder
+        output:         output type, either:
                         - 'dict', dictionary of spike times per unit
                         - 'compact', (:,2) array of [timestamps, unit ids]
                         - 'full', (:,2) array of [timestamps, electrode groups, clusters]
                         - 'regions', dict of {region id: dict}, entries are {'spikes': region spikes, 'units': region units}
-        anat_file      str = None, DESCRIBE
-        return_elec    bool = False, if true, return cluster_loc
-        return_loc     bool = False, if true, return cluster_loc
-        reload         bool = False, load original files, bypassing Regions/<basename>_spikes.npz backup (for 'output' = 'regions')
+        anat_file:      str = None, DESCRIBE
+        return_elec:    if True, directly load CellExplorer files and return `electrodes`
+        return_loc:     if True, directly load CellExplorer files and return `cluster_loc`
+        reload:         if True, load original files, ignoring Regions/<basename>_spikes.npz backup (for `output` 'regions')
 
     output:
-        spikes         (see 'output')
-        electrodes     (n) float, optional, electrode id per unit
-        cluster_loc    (n) float, optional, index of max spike-amplitude cluster per unit
+        spikes:         see `output`
+        electrodes:     (n) float, optional, electrode id per unit
+        cluster_loc:    (n) float, optional, index of max spike-amplitude cluster per unit
     """
 
-    file_root = pathlib.Path(session).with_suffix('')
-    cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
-    if cell_metrics_file.exists():
+    if output is None: output = 'dict'
+    extra = return_elec or return_loc
+    froot = pathlib.Path(session).with_suffix('')
+
+    # in 'regions' mode, try loading
+    spike_file = froot.parent / "Regions" / (froot.stem + "_spikes.npz")
+    if output == "regions" and not reload and spike_file.exists():
+        spikes = loadRegionSpikes(spike_file)
         if return_elec or return_loc:
-            spikes, electrode_id, cluster_loc = loadCellMetricsFile(session,output=output,anat_file=anat_file,return_extra=True,reload=reload)
-        else:
-            spikes = loadCellMetricsFile(session,output=output,anat_file=anat_file,reload=reload)
-    else:
-        if return_elec or return_loc:
-            raise ValueError("'return_elec' and 'return_loc' are not implemented for .clu files")
-        spikes = loadCluFiles(session,output=output,anat_file=anat_file,reload=reload)
-
-    if not return_elec and not return_loc:
-        return spikes
-    out = (spikes, electrode_id, cluster_loc) # prepare tuple to return requested outputs
-    return out[:2+return_loc:2-return_elec]
-
-
-def loadCellMetricsFile(session:str|PathLike[str], output:str='dict', anat_file:str=None, return_extra:bool=False, reload:bool=False):
-
-    file_root = pathlib.Path(session).with_suffix('')
-
-    # load .cell_metrics.cellinfo.mat file only if necessary
-    if output != 'regions' or reload or return_extra:
-        cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
-        if not cell_metrics_file.exists():
-            raise FileNotFoundError(f'{cell_metrics_file} not found')
-
-        data = scipy.io.loadmat(cell_metrics_file,simplify_cells=True)['cell_metrics']
-        unit_id = data['UID'] - 1
-        electrode_id = data['electrodeGroup'] # starts at 1
-        # starts from 0 CHECK WITH CLUSTER LOC, there's also maxWaveformChannelOrder, there's also Putative cell type!!
-        cluster_loc = data['maxWaveformCh']
-        spikes = data['spikes']['times']
-
-    if output == 'dict':
-        spikes = dict(zip(unit_id,spikes))
-
-    elif output == 'compact':
-        ids = np.repeat(unit_id, [len(s) for s in spikes])
-        spikes = np.stack((np.concatenate(spikes),ids), axis=1)
-        spikes = spikes[spikes[:, 0].argsort()]
-
-    elif output == 'full':
-        electrodes = np.repeat(electrode_id, [len(s) for s in spikes])
-        cluster_id = data['cluID']  # min is 2, as 0 and 1 are excluded clusters?
-        clusters = np.repeat(cluster_id, [len(s) for s in spikes])
-        spikes = np.stack((np.concatenate(spikes), electrodes, clusters), axis=1)
-        spikes = spikes[spikes[:, 0].argsort()]
-
-    elif output == 'regions':
-        # try loading
-        spike_file = file_root.parent / 'Regions' / (file_root.stem + '_spikes.npz')
-        if not reload and spike_file.exists():
-            spikes = loadRegionSpikes(spike_file)
-        else:
-            spikes_dict = dict(zip(unit_id,spikes))
-            if anat_file is None:
-                raise ValueError("'anat_file' must be provided when 'output' = 'regions'")
-            anat = loadAnatomyFile(anat_file)
-            anat = anat[anat['rat'] == int(file_root.stem[3:6])] # keep rat of interest, deduced from file name
-            ids = np.unique(anat['region'])
-            spikes = {str(id): {} for id in ids}
-            for id in ids:
-                spikes[id]['e_group'] = {g: [] for g in np.unique(anat[anat['region'] == id]['electrode'])}
-                s = []
-                for electrode in spikes[id]['e_group']:
-                    electrode_units = unit_id[electrode_id == electrode]
-                    spikes[id]['e_group'][electrode] = electrode_units
-                    for unit in electrode_units:
-                        s.append(np.array([spikes_dict[unit], [unit] * spikes_dict[unit].size]).T)
-                # assing spikes, sorted by time
-                if len(s):
-                    s = np.concatenate(s)
-                    spikes[id]['spikes'] = s[s[:,0].argsort()]
-                else:
-                    spikes[id]['spikes'] = np.empty((0,2))
-            # save
-            saveRegionSpikes(spike_file,spikes)
+            raise ValueError("'return_elec' and 'return_loc' are not implemented for 'reload' = False")
 
     else:
-        raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
+        load_ce = extra # load cell explorer files?
+        if not load_ce: # try kk, fallback to cell explorer
+            try:
+                spikes = load_clu(session, output=output, anat_file=anat_file)
+                if output == "regions": saveRegionSpikes(spike_file, spikes)
+            except:
+                load_ce = True
+        if load_ce:
+            spikes = load_cellmetrics(session, output=output, anat_file=anat_file, return_extra=extra)
+            if extra: spikes, electrode_id, cluster_loc = spikes
+            out = (spikes, electrode_id, cluster_loc) # prepare tuple to return requested outputs
+            return out[:2+return_loc:2-return_elec]
 
-    if return_extra:
-        return spikes, electrode_id, cluster_loc
     return spikes
 
 
-def loadCluFiles(session:str|PathLike[str], rate:float=None, output:str='dict', anat_file:str=None, reload:bool=False):
+def load_clu(session:str|PathLike[str], rate:float=None, output:str=None, anat_file:str=None):
+    """load spikes for a session from .clu and .res files
 
-    if output not in ['dict','compact','full','regions']:
+    Args:
+        session:      path to session's .xml file, spike files must be in session folder
+        rate:         DESCRIBE
+        output:       output type, either:
+                      - 'dict', dictionary of spike times per unit + dictionary of mua times per group
+                      - 'compact', (:,2) array of [spike time, unit id] + (:,2) array of [mua time, group]
+                      - 'full', (:,2) array of [spike time, group, cluster] + (:,2) array of [mua time, group]
+                      - 'regions', dict of {region id: dict}, elements have keys 'spikes', 'e_group', 'mua'
+        anat_file:    str = None, DESCRIBE
+
+    Returns:
+        spikes:       see `output`
+        mua:          only for `output` = 'dict'
+    """
+
+    if output is None: output = 'dict'
+    if output not in ('dict','compact','full','regions'):
         raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
 
-    # load parameters n_channels from .xml
     froot = pathlib.Path(session).with_suffix('')
+    # load sampling rate from .xml
     if rate is None:
         tree = xml.etree.ElementTree.parse(froot.with_suffix(".xml"))
         root = tree.getroot()
@@ -147,12 +106,14 @@ def loadCluFiles(session:str|PathLike[str], rate:float=None, output:str='dict', 
     # create valid spike groups (i.e., electrodes where .res and .clu files have compatible length)
     groups = np.sort(list(res.keys()))
     clu_spikes = {}
+    clu_mua = {}
     for group in groups:
         if group in res and group in clu and len(res[group]) == len(clu[group])-1:
-            clu_spikes[group] = np.array([res[group], np.full(len(res[group]),group), clu[group][1:]]).T
-            keep = (clu_spikes[group][:,-1] != 0) & (clu_spikes[group][:,-1] != 1) # remove artifacts and MUA
-            clu_spikes[group] = clu_spikes[group][keep,:]
-            clu_spikes[group][:,0] /= rate
+            times = res[group] / rate; cid = clu[group][1:]
+            ok = (cid != 0) & (cid != 1) # remove artifacts and MUA
+            clu_spikes[int(group)] = np.column_stack((times[ok], np.full(ok.sum(),group), cid[ok])) # rows: t, group, cluster
+            ok = cid == 1 # just MUA
+            clu_mua[int(group)] = np.column_stack((times[ok], np.full(ok.sum(),group))) # rows: t, group
     if not clu_spikes:
         raise FileNotFoundError('no valid .res or .clu file found')
 
@@ -161,63 +122,133 @@ def loadCluFiles(session:str|PathLike[str], rate:float=None, output:str='dict', 
         spikes = {}
         id = 0
         for group in clu_spikes:
-            units, idx = np.unique(clu_spikes[group][:,1:],axis=0,return_inverse=True)
+            units, idx = np.unique(clu_spikes[group][:,1:], axis=0, return_inverse=True)
             for u in range(len(units)):
                 spikes[id] = clu_spikes[group][idx==u,0]
                 id += 1
+        mua = {m: clu_mua[m][:,0] for m in clu_mua}
 
     elif output == 'compact':
         # concatenate all values in spikes, use unique for ids
-        spikes = np.concatenate(tuple(clu_spikes.values()),axis=0)
-        units, idx = np.unique(spikes[:,1:],axis=0,return_inverse=True)
-        spikes = np.stack((spikes[:,0],idx),axis=1)
+        spikes = np.concatenate(tuple(clu_spikes.values()), axis=0)
+        units, idx = np.unique(spikes[:,1:], axis=0, return_inverse=True)
+        spikes = np.stack((spikes[:,0],idx), axis=1)
         spikes = spikes[spikes[:,0].argsort()]
+        mua = np.concatenate(tuple(clu_mua.values()), axis=0)
+        mua = mua[mua[:,0].argsort()]
 
     elif output == 'full':
         spikes = np.concatenate(tuple(clu_spikes.values()),axis=0)
         spikes = spikes[spikes[:,0].argsort()]
+        mua = np.concatenate(tuple(clu_mua.values()), axis=0)
+        mua = mua[mua[:,0].argsort()]
 
     else:
-        # try loading
-        spike_file = froot.parent / 'Regions' / (froot.stem + '_spikes.npz')
-        if not reload and spike_file.exists():
-            spikes = loadRegionSpikes(spike_file)
-        else:
-            if anat_file is None:
-                raise ValueError("'anat_file' must be provided when 'output' = 'regions'")
-            anat = loadAnatomyFile(anat_file)
-            anat = anat[anat['rat'] == int(froot.stem[3:6])] # keep rat of interest, deduced from file name
-            ids = np.unique(anat['region'])
-            spikes = {id: {} for id in ids}
-            unit_count = 0
-            for id in ids:
-                spikes[id]['e_group'] = {g: [] for g in np.unique(anat[anat['region'] == id]['electrode'])}
-                sp = []
-                for electrode in spikes[id]['e_group']:
-                    if electrode in clu_spikes:
-                        # label units
-                        s = clu_spikes[electrode]
-                        u, idx = np.unique(s[:,1:], axis=0, return_inverse=True)
-                        sp.append(np.stack((s[:,0],idx+unit_count),axis=1))
-                        spikes[id]['e_group'][electrode] = np.arange(unit_count,unit_count+len(u))
-                        unit_count = unit_count + len(u)
-                if len(sp):
-                    sp = np.concatenate(sp)
-                    spikes[id]['spikes'] = sp[sp[:,0].argsort()] # sort by time
-                else:
-                    spikes[id]['spikes'] = np.array(sp,ndmin=2)
+        if anat_file is None:
+            raise ValueError("'anat_file' must be provided when 'output' = 'regions'")
+        anat = loadAnatomyFile(anat_file)
+        anat = anat[anat['rat'] == int(froot.stem[3:6])] # keep rat of interest, deduced from file name
+        reg_ids = np.unique(anat['region']).tolist()
+        spikes = {id: {} for id in reg_ids}
+        unit_count = 0
+        for id in reg_ids:
+            spikes[id]['e_group'] = {g: [] for g in np.unique(anat[anat['region'] == id]['electrode'])}
+            # spikes
+            sp = []
+            for electrode in spikes[id]['e_group']:
+                if electrode in clu_spikes:
+                    # label units
+                    s = clu_spikes[electrode]
+                    u, idx = np.unique(s[:,1:], axis=0, return_inverse=True)
+                    sp.append(np.stack((s[:,0],idx+unit_count),axis=1))
+                    spikes[id]['e_group'][electrode] = np.arange(unit_count,unit_count+len(u))
+                    unit_count = unit_count + len(u)
+            if len(sp):
+                sp = np.concatenate(sp)
+                spikes[id]['spikes'] = sp[sp[:,0].argsort()] # sort by time
+            else:
+                spikes[id]['spikes'] = np.array(sp, ndmin=2)
+            # mua
+            mua = [clu_mua[electrode] for electrode in spikes[id]['e_group'] if electrode in clu_mua]
+            if len(mua):
+                mua = np.concatenate(mua)
+                spikes[id]['mua'] = mua[mua[:,0].argsort()] # sort by time
+            else:
+                spikes[id]['mua'] = np.array(mua, ndmin=2)
+        return spikes
 
-            # save
-            saveRegionSpikes(spike_file,spikes)
+    return spikes, mua
 
+
+def load_cellmetrics(session:str|PathLike[str], output:str=None, anat_file:str=None, return_extra:bool=None):
+
+    if output is None: output = 'dict'
+    if output not in ('dict','compact','full','regions'):
+        raise ValueError("'output' must be 'dict', 'compact', 'full', or 'regions'")
+
+    file_root = pathlib.Path(session).with_suffix('')
+
+    # load .cell_metrics.cellinfo.mat file only if necessary
+    if output != 'regions' or return_extra:
+        cell_metrics_file = file_root.with_suffix('.cell_metrics.cellinfo.mat')
+        if not cell_metrics_file.exists():
+            raise FileNotFoundError(f'{cell_metrics_file} not found')
+
+        data = scipy.io.loadmat(cell_metrics_file,simplify_cells=True)['cell_metrics']
+        unit_id = data['UID'] - 1
+        electrode_id = data['electrodeGroup'] # starts at 1
+        # starts from 0 CHECK WITH CLUSTER LOC, there's also maxWaveformChannelOrder, there's also Putative cell type!!
+        cluster_loc = data['maxWaveformCh']
+        spikes = data['spikes']['times']
+
+    if output == 'dict':
+        spikes = dict(zip(unit_id, spikes))
+
+    elif output == 'compact':
+        ids = np.repeat(unit_id, [len(s) for s in spikes])
+        spikes = np.stack((np.concatenate(spikes),ids), axis=1)
+        spikes = spikes[spikes[:, 0].argsort()]
+
+    elif output == 'full':
+        electrodes = np.repeat(electrode_id, [len(s) for s in spikes])
+        cluster_id = data['cluID']  # min is 2, as 0 and 1 are excluded clusters?
+        clusters = np.repeat(cluster_id, [len(s) for s in spikes])
+        spikes = np.stack((np.concatenate(spikes), electrodes, clusters), axis=1)
+        spikes = spikes[spikes[:, 0].argsort()]
+
+    else:
+        spikes_dict = dict(zip(unit_id, spikes))
+        if anat_file is None:
+            raise ValueError("'anat_file' must be provided when 'output' = 'regions'")
+        anat = loadAnatomyFile(anat_file)
+        anat = anat[anat['rat'] == int(file_root.stem[3:6])] # keep rat of interest, deduced from file name
+        ids = np.unique(anat['region'])
+        spikes = {str(id): {} for id in ids}
+        for id in ids:
+            spikes[id]['e_group'] = {g: [] for g in np.unique(anat[anat['region'] == id]['electrode'])}
+            s = []
+            for electrode in spikes[id]['e_group']:
+                electrode_units = unit_id[electrode_id == electrode]
+                spikes[id]['e_group'][electrode] = electrode_units
+                for unit in electrode_units:
+                    s.append(np.array([spikes_dict[unit], [unit] * spikes_dict[unit].size]).T)
+            # assing spikes, sorted by time
+            if len(s):
+                s = np.concatenate(s)
+                spikes[id]['spikes'] = s[s[:,0].argsort()]
+            else:
+                spikes[id]['spikes'] = np.empty((0,2))
+
+    if return_extra:
+        return spikes, electrode_id, cluster_loc
     return spikes
 
 
 def loadAnatomyFile(file_path:str|PathLike[str]):
     """load .anat file, whose columns must be [rat, electrode, brain region] (comma separated)
 
-    arguments:
-        file_path    file, path to .anat file
+    Args:
+        file_path:    file, path to .anat file
     """
 
     return np.genfromtxt(file_path,delimiter=",",comments="%",dtype=[("rat",int),("electrode",int),("region","U50")])
@@ -228,6 +259,8 @@ def loadRegionSpikes(file:str|PathLike[str]):
     spikes = {r[3:]: {'spikes': spike_npz[r]} for r in spike_npz.files if r.startswith('sp_')}
     for reg in spikes:
         spikes[reg]['e_group'] = {int(r.rsplit('_',1)[-1]) : spike_npz[r] for r in spike_npz.files if r.startswith(f'un_{reg}')}
+        if f'mua_{reg}' in spike_npz.files:
+            spikes[reg]['mua'] = spike_npz[f'mua_{reg}']
 
     return spikes
 
@@ -237,7 +270,8 @@ def saveRegionSpikes(file:str|PathLike[str], spikes):
     if not file.parent.exists():
         pathlib.Path.mkdir(file.parent)
     np.savez(file, **{f'sp_{r}': s['spikes'] for r, s in spikes.items()},
-                   **{f'un_{r}_{g}': units for r, s in spikes.items() for g, units in s['e_group'].items()})
+                   **{f'un_{r}_{g}': units for r, s in spikes.items() for g, units in s['e_group'].items()},
+                   **{f'mua_{r}': s['mua'] for r, s in spikes.items()})
 
     return
 
