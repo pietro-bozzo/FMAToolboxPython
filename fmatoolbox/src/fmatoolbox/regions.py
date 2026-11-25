@@ -31,7 +31,7 @@ class regions:
 
         Args:
             session        path to session's .xml file
-            ids            (:,) string = None, regions to load (default is all recorded regions)
+            ids            (:,) string = None, regions to load (default is all recorded regions), ignores regions not found in data
             epochs         (:,) string = None, session epochs to load from <basename>.cat.evt file
             states         (:,) string = None, behavioral states to load (they correspond to extensions of files to load)
             events         (:,) string = None, additional events to load (they correspond to extensions of files to load)
@@ -107,13 +107,11 @@ class regions:
 
                 self.events[name] = e
 
-        if isinstance(ids,str):
-            ids = [ids]
+        if ids is None: ids = []
+        self.ids = to_list(ids)
         if ids:
-            self.ids = list(dict.fromkeys(ids))
-            self.region = {id : {} for id in ids}
+            self.region = {id : {} for id in self.ids}
         else:
-            self.ids = ids
             self.region = {}
 
         # 5. load spikes and store them per region
@@ -124,15 +122,16 @@ class regions:
             if not anat_file.exists():
                 anat_file = _regionDataPath() / anat_file
         if load_spikes:
-            self.region = fmatoolbox.data.load_spikes(session,output='regions',anat_file=anat_file,reload=reload)
+            self.region = fmatoolbox.data.load_spikes(session, output='regions', anat_file=anat_file, reload=reload)
             if ids:
-                self.region = {r: self.region[r] for r in ids}
-            else:
-                self.ids = np.array(list(self.region.keys()), dtype=str)
+                self.region = {r: self.region[r] for r in self.ids if r in self.region}
+            self.ids = list(self.region.keys())
             if not self.all_epochs:
                 # restrict spikes to session epochs
                 for id in self.ids:
                     self.region[id]['spikes'] = fmatoolbox.intervals.restrict(self.region[id]['spikes'],epoch_intervals)
+                    if 'mua' in self.region[id]:
+                        self.region[id]['mua'] = fmatoolbox.intervals.restrict(self.region[id]['mua'],epoch_intervals)
 
         # 6. load electrode groups and channels per region
         if lfp_anat is None:
@@ -536,13 +535,16 @@ class regions:
     ## functions to compute quantities ##
 
 
-    def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, when=None, shift:bool=None, window:float=None, step:int=None,
-                   smooth:float=None, norm:bool=None):
+    def firingRate(self, regs:Iterable[str]=None, e_groups:Iterable[int]=None, mua:str=None, when=None,
+                   shift:bool=None, window:float=None, step:int=None, smooth:float=None, norm:bool=None):
         """compute population firing rate (Hz) per region and / or electrode group
 
         Args:
             regs:       `n` brain regions to compute firing rate of, default is all regions
             e_groups:   `m` electrode groups (starting at 1) to compute firing rate of, default is none
+            mua:        if given, specifies how to include MUA in computation, either:
+                        - 'pool': pool clustered spikes and MUA
+                        - 'separate': append an extra column per output with MUA rates only
             when:       DESCRIBE, same input as eventIntervals
             shift:      if True, shift epochs together in time after filtering by `when`
             window:     float = 0.05 s, bin size to count spikes
@@ -555,6 +557,8 @@ class regions:
             rate:       2d array, every row is [time stamp (s), firing rates for `n` regions, firing rates for `m` electrodes],
                         input order of regions and electrodes is preserved
         """
+
+        if mua is not None: print('implement!')
 
         regs, e_groups, _ = self._checkIDs(regs=regs,e_groups=e_groups)
         do_restrict = when is not None
